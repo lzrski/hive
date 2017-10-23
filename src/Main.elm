@@ -39,7 +39,7 @@ view model =
             [ svg
                 [ width "800px", height "800px", viewBox "0 0 800 800" ]
                 [ rect
-                    [ x "200"
+                    [ x <| toString (model.elapsed / 100)
                     , y "200"
                     , width "100"
                     , height "100"
