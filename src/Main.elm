@@ -2,6 +2,7 @@ module Main exposing (..)
 
 import Html exposing (Html, program, text, h1, div, pre)
 import Time exposing (Time, second)
+import AnimationFrame
 
 
 type alias Model =
@@ -36,8 +37,8 @@ type Msg
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        Tick now ->
-            ( now, Cmd.none )
+        Tick delta ->
+            ( model + delta, Cmd.none )
 
         NoOp ->
             ( model, Cmd.none )
@@ -48,4 +49,4 @@ init =
 
 
 subscriptions model =
-    Time.every second Tick
+    AnimationFrame.diffs Tick
