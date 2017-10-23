@@ -1,0 +1,15 @@
+{
+  "name": "hive",
+  "version": "1.0.0",
+  "description": "A hive simulator / game",
+  "main": "built/index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Tadeusz Łazurski (https://www.lazurski.pl/)",
+  "license": "GPL-3.0",
+  "devDependencies": {
+    "elm": "^0.18.0",
+    "elm-live": "^2.7.5"
+  }
+}
