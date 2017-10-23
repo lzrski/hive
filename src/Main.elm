@@ -1,12 +1,15 @@
 module Main exposing (..)
 
-import Html exposing (Html, program, text, h1, div, pre)
-import Time exposing (Time, second)
 import AnimationFrame
+import Html exposing (Html, button, div, h1, pre, program, text)
+import Html.Events exposing (onClick)
+import Time exposing (Time, second)
 
 
 type alias Model =
-    Time
+    { elapsed : Time
+    , paused : Bool
+    }
 
 
 main =
@@ -26,27 +29,42 @@ view model =
         , pre
             []
             [ text <| toString model ]
+        , if model.paused then
+            button [ onClick Resume ] [ text "Resume" ]
+          else
+            button [ onClick Pause ] [ text "Pause" ]
         ]
 
 
 type Msg
     = NoOp
-    | Tick Time
+    | Frame Time
+    | Pause
+    | Resume
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        Tick delta ->
-            ( model + delta, Cmd.none )
-
         NoOp ->
             ( model, Cmd.none )
 
+        Frame delta ->
+            ( { model | elapsed = model.elapsed + delta }, Cmd.none )
+
+        Pause ->
+            ( { model | paused = True }, Cmd.none )
+
+        Resume ->
+            ( { model | paused = False }, Cmd.none )
+
 
 init =
-    ( 0, Cmd.none )
+    ( Model 0 False, Cmd.none )
 
 
 subscriptions model =
-    AnimationFrame.diffs Tick
+    if model.paused then
+        Sub.none
+    else
+        AnimationFrame.diffs Frame
