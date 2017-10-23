@@ -1,7 +1,9 @@
 module Main exposing (..)
 
 import AnimationFrame
-import Html exposing (Html, button, div, h1, pre, program, text)
+import Html exposing (..)
+import Svg exposing (..)
+import Svg.Attributes exposing (..)
 import Html.Events exposing (onClick)
 import Time exposing (Time, second)
 
@@ -25,14 +27,28 @@ view : Model -> Html Msg
 view model =
     div []
         [ h1 []
-            [ text "Hello!" ]
+            [ Html.text "Hello!" ]
         , pre
             []
-            [ text <| toString model ]
+            [ Html.text <| toString model ]
         , if model.paused then
-            button [ onClick Resume ] [ text "Resume" ]
+            button [ onClick Resume ] [ Html.text "Resume" ]
           else
-            button [ onClick Pause ] [ text "Pause" ]
+            button [ onClick Pause ] [ Html.text "Pause" ]
+        , div []
+            [ svg
+                [ width "800px", height "800px", viewBox "0 0 800 800" ]
+                [ rect
+                    [ x "200"
+                    , y "200"
+                    , width "100"
+                    , height "100"
+                    , rx "20"
+                    , ry "20"
+                    ]
+                    []
+                ]
+            ]
         ]
 
 
