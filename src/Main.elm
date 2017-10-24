@@ -1,16 +1,22 @@
 module Main exposing (..)
 
 import AnimationFrame
+import Bug exposing (Bug, create)
 import Html exposing (..)
-import Svg exposing (..)
-import Svg.Attributes exposing (..)
 import Html.Events exposing (onClick)
+import OpenSolid.Point2d as Point2d exposing (Point2d)
+import OpenSolid.BoundingBox2d as BoundingBox2d
+import Svg exposing (Svg)
+import Svg.Attributes as Attributes
+import OpenSolid.Svg as Svg
+import Svg.Attributes exposing (..)
 import Time exposing (Time, second)
 
 
 type alias Model =
     { elapsed : Time
     , paused : Bool
+    , bugs : List Bug
     }
 
 
@@ -35,21 +41,37 @@ view model =
             button [ onClick Resume ] [ Html.text "Resume" ]
           else
             button [ onClick Pause ] [ Html.text "Pause" ]
-        , div []
-            [ svg
-                [ width "800px", height "800px", viewBox "0 0 800 800" ]
-                [ rect
-                    [ x <| toString (model.elapsed / 100)
-                    , y "200"
-                    , width "100"
-                    , height "100"
-                    , rx "20"
-                    , ry "20"
-                    ]
-                    []
-                ]
-            ]
+        , div [] [ scene model ]
         ]
+
+
+scene model =
+    Svg.g
+        []
+        (List.map
+            bug
+            model.bugs
+        )
+        |> Svg.render2d
+            (BoundingBox2d.with
+                { minX = -400
+                , maxX = 400
+                , minY = -400
+                , maxY = 400
+                }
+            )
+
+
+bug : Bug -> Svg Msg
+bug bug =
+    Svg.point2d
+        { radius = 3
+        , attributes =
+            [ Svg.Attributes.stroke "red"
+            , Svg.Attributes.fill "pink"
+            ]
+        }
+        bug.position
 
 
 type Msg
@@ -76,7 +98,15 @@ update msg model =
 
 
 init =
-    ( Model 0 False, Cmd.none )
+    ( { elapsed = 0
+      , paused = False
+      , bugs =
+            [ Bug.create <| Point2d.fromCoordinates ( 10, 10 )
+            , Bug.create <| Point2d.fromCoordinates ( -10, 20 )
+            ]
+      }
+    , Cmd.none
+    )
 
 
 subscriptions model =
