@@ -88,7 +88,15 @@ update msg model =
             ( model, Cmd.none )
 
         Frame delta ->
-            ( { model | elapsed = model.elapsed + delta }, Cmd.none )
+            ( { model
+                | elapsed = model.elapsed + delta
+                , bugs =
+                    model.bugs
+                        |> List.map (Bug.update delta)
+                        |> List.filter (.nutrition >> (<) 0)
+              }
+            , Cmd.none
+            )
 
         Pause ->
             ( { model | paused = True }, Cmd.none )
