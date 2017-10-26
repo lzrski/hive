@@ -12,9 +12,11 @@ type alias Bug =
     }
 
 
-create : Point2d -> Bug
-create point =
-    Bug point 1.0
+create : ( Float, Float ) -> Bug
+create coordinates =
+    Bug
+        (OpenSolid.Point2d.fromCoordinates coordinates)
+        1.0
 
 
 update : Time -> Bug -> Bug

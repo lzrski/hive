@@ -1,7 +1,8 @@
 module Main exposing (..)
 
 import AnimationFrame
-import Bug exposing (Bug, create)
+import Bug exposing (Bug)
+import Food exposing (Food)
 import Html exposing (..)
 import Html.Events exposing (onClick)
 import OpenSolid.Point2d as Point2d exposing (Point2d)
@@ -16,8 +17,13 @@ import Time exposing (Time, second)
 type alias Model =
     { elapsed : Time
     , paused : Bool
-    , bugs : List Bug
+    , entities : List Entity
     }
+
+
+type Entity
+    = Bug Bug
+    | Food Food
 
 
 main =
@@ -41,16 +47,16 @@ view model =
             button [ onClick Resume ] [ Html.text "Resume" ]
           else
             button [ onClick Pause ] [ Html.text "Pause" ]
-        , div [] [ scene model ]
+        , div [] [ sceneView model ]
         ]
 
 
-scene model =
+sceneView model =
     Svg.g
         []
         (List.map
-            bug
-            model.bugs
+            entityView
+            model.entities
         )
         |> Svg.render2d
             (BoundingBox2d.with
@@ -62,8 +68,17 @@ scene model =
             )
 
 
-bug : Bug -> Svg Msg
-bug bug =
+entityView entity =
+    case entity of
+        Bug bug ->
+            bugView bug
+
+        Food food ->
+            foodView food
+
+
+bugView : Bug -> Svg Msg
+bugView bug =
     Svg.point2d
         { radius = 3
         , attributes =
@@ -72,6 +87,18 @@ bug bug =
             ]
         }
         bug.position
+
+
+foodView : Food -> Svg Msg
+foodView { position } =
+    Svg.point2d
+        { radius = 2
+        , attributes =
+            [ Svg.Attributes.stroke "green"
+            , Svg.Attributes.fill "lime"
+            ]
+        }
+        position
 
 
 type Msg
@@ -90,10 +117,9 @@ update msg model =
         Frame delta ->
             ( { model
                 | elapsed = model.elapsed + delta
-                , bugs =
-                    model.bugs
-                        |> List.map (Bug.update delta)
-                        |> List.filter (.nutrition >> (<) 0)
+                , entities =
+                    model.entities
+                        |> List.map (updateEntity delta)
               }
             , Cmd.none
             )
@@ -105,12 +131,22 @@ update msg model =
             ( { model | paused = False }, Cmd.none )
 
 
+updateEntity delta entity =
+    case entity of
+        Bug bug ->
+            Bug (Bug.update delta bug)
+
+        Food food ->
+            Food (Food.update delta food)
+
+
 init =
     ( { elapsed = 0
       , paused = False
-      , bugs =
-            [ Bug.create <| Point2d.fromCoordinates ( 10, 10 )
-            , Bug.create <| Point2d.fromCoordinates ( -10, 20 )
+      , entities =
+            [ Bug <| Bug.create ( 10, 10 )
+            , Bug <| Bug.create ( -10, 20 )
+            , Food <| Food.create ( 20, -20 )
             ]
       }
     , Cmd.none
