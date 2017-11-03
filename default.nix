@@ -6,7 +6,7 @@ with import <nixpkgs> {}; stdenv.mkDerivation {
     elmPackages.elm-format
   ];
   shellHook = ''
-    # Start user's preffered shell
+    # Start user's preferred shell
     exec ${builtins.getEnv "SHELL"}
   '';
 }
