@@ -112,12 +112,17 @@ world_update delta world =
 reason : Entities -> Actions
 reason =
     Dict.map
-        (\key entity ->
+        (\id entity ->
             let
                 _ =
                     Debug.log "Reasoning" entity
             in
-                Idle
+                case entity of
+                    Bug bug ->
+                        Crawl Direction2d.y
+
+                    _ ->
+                        Idle
         )
 
 
@@ -148,7 +153,28 @@ perform delta actions world =
                                 Idle ->
                                     world
 
-                                _ ->
+                                Crawl direction ->
+                                    { world
+                                        | entities =
+                                            entities
+                                                |> Dict.update id
+                                                    (Maybe.map
+                                                        (\entity ->
+                                                            case entity of
+                                                                Bug state ->
+                                                                    let
+                                                                        displacement =
+                                                                            Direction2d.toVector direction
+                                                                    in
+                                                                        Bug { state | position = Point2d.translateBy displacement state.position }
+
+                                                                _ ->
+                                                                    entity
+                                                        )
+                                                    )
+                                    }
+
+                                Consume target ->
                                     world
 
                         -- Food can take no actions ATM
