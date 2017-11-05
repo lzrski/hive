@@ -136,19 +136,49 @@ reason entities =
                 in
                     case entity of
                         Bug bug ->
-                            attraction entities bug.position
-                                |> Vector2d.direction
-                                |> Maybe.withDefault Direction2d.x
-                                |> Crawl
+                            case reachableFood entities bug.position of
+                                Just target ->
+                                    Consume target
+
+                                Nothing ->
+                                    attraction entities bug.position
+                                        |> Vector2d.direction
+                                        |> Maybe.withDefault Direction2d.x
+                                        |> Crawl
 
                         _ ->
                             Idle
             )
 
 
+reachableFood : Entities -> Point2d -> Maybe Id
+reachableFood entities position =
+    entities
+        |> Dict.foldl
+            (\id entity result ->
+                case entity of
+                    Food food ->
+                        let
+                            distance =
+                                Point2d.distanceFrom food.position position
+                        in
+                            if distance < 1 then
+                                Just id
+                            else
+                                result
+
+                    _ ->
+                        result
+            )
+            Nothing
+
+
 {-| Calculate the attraction vector for a bug at a given position.
 
 The bug will consider every Food entity in the environment and assign value to it based on it's distance (the further the food is, the less attraction value it has). Then resulting vectors will be summed.
+
+TODO: Take into account how hungry is the bug (hungry goes is more affected by distance - just go to the nearest food).
+
 -}
 attraction : Entities -> Point2d -> Vector2d
 attraction entities position =
@@ -220,7 +250,39 @@ perform delta actions world =
                                             |> World seed
 
                                 Consume target ->
-                                    world
+                                    case Dict.get target entities of
+                                        Just (Food food) ->
+                                            let
+                                                amount =
+                                                    Basics.min food.quantity (0.001 * delta)
+
+                                                remaining =
+                                                    food.quantity - amount
+
+                                                remains =
+                                                    if remaining > 0 then
+                                                        Just <| Food { food | quantity = remaining }
+                                                    else
+                                                        Nothing
+
+                                                bug =
+                                                    Bug
+                                                        { state
+                                                            | nutrition =
+                                                                state.nutrition + amount
+                                                        }
+
+                                                newEntities =
+                                                    entities
+                                                        |> Dict.update target (always remains)
+                                                        |> Dict.insert id bug
+                                            in
+                                                { world
+                                                    | entities = newEntities
+                                                }
+
+                                        _ ->
+                                            world
 
                         -- Food can take no actions ATM
                         Just (Food food) ->
@@ -342,11 +404,18 @@ init =
             world_empty
                 |> world_insert (bug ( 0, 0 ))
                 |> world_insert (bug ( -100, 200 ))
-                |> world_insert (food ( 200, -200 ))
-                |> world_insert (food ( 200, -100 ))
+                |> world_insert (food ( 210, -10 ))
+                |> world_insert (food ( 200, -20 ))
+                |> world_insert (food ( 200, -50 ))
+                |> world_insert (food ( 180, -100 ))
+                |> world_insert (food ( 150, -150 ))
+                |> world_insert (food ( 100, 290 ))
+                |> world_insert (food ( 100, -200 ))
+                |> world_insert (food ( 0, -150 ))
+                |> world_insert (food ( 20, -100 ))
+                |> world_insert (food ( -200, 300 ))
                 |> world_insert (food ( -200, -200 ))
                 |> world_insert (food ( -200, -300 ))
-                |> world_insert (food ( -200, 300 ))
       }
     , Cmd.none
     )
