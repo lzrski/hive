@@ -58,6 +58,7 @@ type Entity
     = Bug
         { position : Point2d
         , nutrition : Float
+        , mass : Float
         }
     | Food
         { position : Point2d
@@ -98,6 +99,7 @@ bug coordinates =
     Bug
         { position = Point2d.fromCoordinates coordinates
         , nutrition = 1.0
+        , mass = 1.0
         }
 
 
@@ -269,11 +271,28 @@ perform delta actions world =
                                         distance =
                                             delta * 0.02
 
-                                        bug =
-                                            Bug <| move direction distance state
+                                        energy =
+                                            delta * 0.0001
+
+                                        newState =
+                                            state
+                                                |> move direction distance
+                                                |> burn energy
                                     in
-                                        Dict.insert id bug entities
-                                            |> World seed
+                                        if newState.nutrition <= 0 then
+                                            entities
+                                                |> Dict.remove id
+                                                |> World seed
+                                                |> world_insert
+                                                    (Food
+                                                        { position = newState.position
+                                                        , quantity = newState.mass
+                                                        }
+                                                    )
+                                        else
+                                            entities
+                                                |> Dict.insert id (Bug newState)
+                                                |> World seed
 
                                 Consume target ->
                                     case Dict.get target entities of
@@ -331,6 +350,14 @@ move direction distance state =
             Vector2d.with { length = distance, direction = direction }
     in
         { state | position = Point2d.translateBy displacement position }
+
+
+burn :
+    Float
+    -> { a | nutrition : Float }
+    -> { a | nutrition : Float }
+burn energy state =
+    { state | nutrition = Basics.max 0 (state.nutrition - energy) }
 
 
 main =
