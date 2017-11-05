@@ -28,6 +28,7 @@ import OpenSolid.Direction2d as Direction2d exposing (Direction2d)
 import OpenSolid.Point2d as Point2d exposing (Point2d)
 import OpenSolid.Svg as Svg
 import OpenSolid.Vector2d as Vector2d exposing (Vector2d)
+import Random exposing (initialSeed)
 import Svg exposing (Svg)
 import Svg.Attributes exposing (..)
 import Time exposing (Time, second)
@@ -482,26 +483,22 @@ update msg model =
 world_populate :
     (( Float, Float ) -> Entity)
     -> Int
-    -> Int
     -> World
     -> World
-world_populate constructor rows cols world =
-    {- TODO: Make the distribution uneven (noisy or pseudo random, but in fact deterministic). -}
-    List.range ((cols // 2) * -1) (cols // 2)
-        |> List.foldl
-            (\x current ->
-                List.range ((rows // 2) * -1) (rows // 2)
-                    |> List.foldl
-                        (\y current ->
-                            let
-                                position =
-                                    ( toFloat x * 20, toFloat y * 20 )
-                            in
-                                world_insert (constructor position) <| current
-                        )
-                        current
-            )
-            world
+world_populate constructor count world =
+    let
+        generator =
+            Random.list count <|
+                Random.pair
+                    (Random.int -400 400)
+                    (Random.int -300 300)
+
+        ( positions, _ ) =
+            Random.step generator <| Random.initialSeed world.seed
+    in
+        positions
+            |> List.map (\( x, y ) -> constructor ( toFloat x, toFloat y ))
+            |> List.foldl (\entity current -> world_insert entity current) world
 
 
 init =
@@ -509,8 +506,8 @@ init =
       , paused = False
       , world =
             world_empty
-                |> world_populate food 10 10
-                |> world_populate bug 2 2
+                |> world_populate food 200
+                |> world_populate bug 10
       }
     , Cmd.none
     )
