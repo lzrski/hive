@@ -171,16 +171,11 @@ perform delta actions world =
 
                                 Crawl direction ->
                                     let
-                                        displacement =
-                                            Direction2d.toVector direction
-
-                                        newState =
-                                            { state | position = Point2d.translateBy displacement state.position }
+                                        bug =
+                                            Bug <| move direction 0.2 state
                                     in
-                                        { world
-                                            | entities =
-                                                Dict.insert id (Bug newState) entities
-                                        }
+                                        Dict.insert id bug entities
+                                            |> World seed
 
                                 Consume target ->
                                     world
@@ -190,6 +185,22 @@ perform delta actions world =
                             world
             )
             world
+
+
+move :
+    Direction2d
+    -> Float
+    -> { a | position : Point2d }
+    -> { a | position : Point2d }
+move direction distance state =
+    let
+        { position } =
+            state
+
+        displacement =
+            Vector2d.with { length = distance, direction = direction }
+    in
+        { state | position = Point2d.translateBy displacement position }
 
 
 main =
