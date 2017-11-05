@@ -87,13 +87,6 @@ world_empty =
     }
 
 
-world_insert : Entity -> World -> World
-world_insert entity { seed, entities } =
-    { seed = seed + 1
-    , entities = Dict.insert seed entity entities
-    }
-
-
 bug : ( Float, Float ) -> Entity
 bug coordinates =
     Bug
@@ -132,16 +125,19 @@ reason entities =
                         Debug.log "Reasoning" entity
                 in
                     case entity of
-                        Bug bug ->
-                            case reachableFood entities bug of
-                                Just target ->
-                                    Consume target
+                        Bug state ->
+                            if state.nutrition > 1 then
+                                Idle
+                            else
+                                case reachableFood entities state of
+                                    Just target ->
+                                        Consume target
 
-                                Nothing ->
-                                    attraction entities bug
-                                        |> Vector2d.direction
-                                        |> Maybe.withDefault Direction2d.x
-                                        |> Crawl
+                                    Nothing ->
+                                        attraction entities state
+                                            |> Vector2d.direction
+                                            |> Maybe.withDefault Direction2d.x
+                                            |> Crawl
 
                         _ ->
                             Idle
@@ -264,7 +260,17 @@ perform delta actions world =
                         Just (Bug state) ->
                             case action of
                                 Idle ->
-                                    world
+                                    {- bugs grow when idle -}
+                                    let
+                                        newState =
+                                            { state
+                                                | mass = state.mass + delta / 1000
+                                                , nutrition = state.nutrition - delta / 100
+                                            }
+                                    in
+                                        entities
+                                            |> Dict.insert id (Bug newState)
+                                            |> World seed
 
                                 Crawl direction ->
                                     let
@@ -272,7 +278,7 @@ perform delta actions world =
                                             delta * 0.02
 
                                         energy =
-                                            delta * 0.0001
+                                            delta * 0.00001
 
                                         newState =
                                             state
@@ -334,6 +340,18 @@ perform delta actions world =
                             world
             )
             world
+
+
+
+-- World mutations
+
+
+world_insert : Entity -> World -> World
+world_insert entity { seed, entities } =
+    { seed = seed + 1
+    , entities = Dict.insert seed entity entities
+    }
+
 
 
 move :
