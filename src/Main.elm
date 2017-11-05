@@ -16,26 +16,21 @@
 
 module Main exposing (main)
 
-import Time exposing (Time, second)
-import Dict exposing (Dict)
-import AnimationFrame
-
-
 -- Geometry
-
-import OpenSolid.BoundingBox2d as BoundingBox2d
-import OpenSolid.Point2d as Point2d exposing (Point2d)
-import OpenSolid.Direction2d as Direction2d exposing (Direction2d)
-import OpenSolid.Vector2d as Vector2d exposing (Vector2d)
-
-
 -- View related
 
+import AnimationFrame
+import Dict exposing (Dict)
 import Html exposing (..)
 import Html.Events exposing (onClick)
+import OpenSolid.BoundingBox2d as BoundingBox2d
+import OpenSolid.Direction2d as Direction2d exposing (Direction2d)
+import OpenSolid.Point2d as Point2d exposing (Point2d)
+import OpenSolid.Svg as Svg
+import OpenSolid.Vector2d as Vector2d exposing (Vector2d)
 import Svg exposing (Svg)
 import Svg.Attributes exposing (..)
-import OpenSolid.Svg as Svg
+import Time exposing (Time, second)
 
 
 type alias Model =
@@ -101,7 +96,7 @@ world_insert entity { seed, entities } =
 bug : ( Float, Float ) -> Entity
 bug coordinates =
     Bug
-        { position = (Point2d.fromCoordinates coordinates)
+        { position = Point2d.fromCoordinates coordinates
         , nutrition = 1.0
         }
 
@@ -109,7 +104,7 @@ bug coordinates =
 food : ( Float, Float ) -> Entity
 food coordinates =
     Food
-        { position = (Point2d.fromCoordinates coordinates)
+        { position = Point2d.fromCoordinates coordinates
         , quantity = 1.0
         }
 
@@ -122,7 +117,7 @@ world_update : Time -> World -> World
 world_update delta world =
     world.entities
         |> reason
-        |> \actions -> perform delta actions world
+        |> (\actions -> perform delta actions world)
 
 
 reason : Entities -> Actions
@@ -192,7 +187,7 @@ attraction entities position =
                             Direction2d.from position food.position
 
                         value =
-                            1 / (Point2d.distanceFrom food.position position)
+                            1 / Point2d.distanceFrom food.position position
                     in
                         case direction of
                             Nothing ->
@@ -344,14 +339,18 @@ main =
 view : Model -> Html Msg
 view model =
     div []
-        [ code
-            []
-            [ Html.text <| toString model ]
-        , if model.paused then
-            button [ onClick Resume ] [ Html.text "Resume" ]
-          else
-            button [ onClick Pause ] [ Html.text "Pause" ]
-        , div [] [ sceneView model.world ]
+        [ div [] [ sceneView model.world ]
+        , div []
+            [ if model.paused then
+                button [ onClick Resume ] [ Html.text "Resume" ]
+              else
+                button [ onClick Pause ] [ Html.text "Pause" ]
+            ]
+        , div []
+            [ code
+                []
+                [ Html.text <| toString model ]
+            ]
         ]
 
 
