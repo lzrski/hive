@@ -135,7 +135,7 @@ reason =
             in
                 case entity of
                     Bug bug ->
-                        Crawl Direction2d.y
+                        Crawl Direction2d.x
 
                     _ ->
                         Idle
@@ -164,31 +164,23 @@ perform delta actions world =
                             world
 
                         -- TODO: Perform the action of a bug
-                        Just (Bug bug) ->
+                        Just (Bug state) ->
                             case action of
                                 Idle ->
                                     world
 
                                 Crawl direction ->
-                                    { world
-                                        | entities =
-                                            entities
-                                                |> Dict.update id
-                                                    (Maybe.map
-                                                        (\entity ->
-                                                            case entity of
-                                                                Bug state ->
-                                                                    let
-                                                                        displacement =
-                                                                            Direction2d.toVector direction
-                                                                    in
-                                                                        Bug { state | position = Point2d.translateBy displacement state.position }
+                                    let
+                                        displacement =
+                                            Direction2d.toVector direction
 
-                                                                _ ->
-                                                                    entity
-                                                        )
-                                                    )
-                                    }
+                                        newState =
+                                            { state | position = Point2d.translateBy displacement state.position }
+                                    in
+                                        { world
+                                            | entities =
+                                                Dict.insert id (Bug newState) entities
+                                        }
 
                                 Consume target ->
                                     world
