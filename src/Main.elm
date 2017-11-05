@@ -465,13 +465,20 @@ update msg model =
         NoOp ->
             ( model, Cmd.none )
 
-        Frame delta ->
-            ( { model
-                | elapsed = model.elapsed + delta
-                , world = world_update delta model.world
-              }
-            , Cmd.none
-            )
+        Frame delay ->
+            let
+                delta =
+                    {- Limit virtual detla to 32ms. In effect, with framerates below 30fps the simulation will slow down from the users perspective, but the physics will remain accurate. For high frame rates real delta will be used, making physics even more accurate.
+
+                       Additional bonus - if browser tab is not visible, it will effectively pause the game.
+                    -}
+                    Basics.min delay 32
+            in
+                { model
+                    | elapsed = model.elapsed + delta
+                    , world = world_update delta model.world
+                }
+                    ! []
 
         Pause ->
             ( { model | paused = True }, Cmd.none )
@@ -506,7 +513,7 @@ init =
       , paused = False
       , world =
             world_empty
-                |> world_populate food 200
+                |> world_populate food 300
                 |> world_populate bug 10
       }
     , Cmd.none
