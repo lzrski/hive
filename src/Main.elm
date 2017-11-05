@@ -162,7 +162,7 @@ reachableFood entities position =
                             distance =
                                 Point2d.distanceFrom food.position position
                         in
-                            if distance < 1 then
+                            if distance < 5 then
                                 Just id
                             else
                                 result
@@ -185,6 +185,7 @@ attraction entities position =
     Dict.foldl
         (\_ entity current ->
             case entity of
+                {- Bugs are attracted to food -}
                 Food food ->
                     let
                         direction =
@@ -204,8 +205,33 @@ attraction entities position =
                                         , direction = direction
                                         }
 
-                _ ->
-                    current
+                {- Bugs avoid direct contact with other bugs -}
+                Bug other ->
+                    let
+                        direction =
+                            Direction2d.from position other.position
+
+                        distance =
+                            Point2d.distanceFrom other.position position
+
+                        value =
+                            if distance == 0 then
+                                0
+                            else
+                                {- deterence is very strong when bugs are close, but weakens significantly with distance -}
+                                -10 / (distance ^ 3)
+                    in
+                        case direction of
+                            Nothing ->
+                                {- probably other is self -}
+                                current
+
+                            Just direction ->
+                                Vector2d.with
+                                    { length = value
+                                    , direction = direction
+                                    }
+                                    |> Vector2d.sum current
         )
         Vector2d.zero
         entities
@@ -232,7 +258,6 @@ perform delta actions world =
                         Nothing ->
                             world
 
-                        -- TODO: Perform the action of a bug
                         Just (Bug state) ->
                             case action of
                                 Idle ->
@@ -254,7 +279,7 @@ perform delta actions world =
                                         Just (Food food) ->
                                             let
                                                 amount =
-                                                    Basics.min food.quantity (0.001 * delta)
+                                                    Basics.min food.quantity (0.0001 * delta)
 
                                                 remaining =
                                                     food.quantity - amount
@@ -403,6 +428,10 @@ init =
       , world =
             world_empty
                 |> world_insert (bug ( 0, 0 ))
+                |> world_insert (bug ( 0, 10 ))
+                |> world_insert (bug ( 10, 0 ))
+                |> world_insert (bug ( 19, 4 ))
+                |> world_insert (bug ( -10, 3 ))
                 |> world_insert (bug ( -100, 200 ))
                 |> world_insert (food ( 210, -10 ))
                 |> world_insert (food ( 200, -20 ))
