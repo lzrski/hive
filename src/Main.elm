@@ -46,17 +46,17 @@ type alias Model =
 
 
 type alias World =
-    { seed : ID
+    { seed : Id
     , entities : Entities
     }
 
 
-type alias ID =
+type alias Id =
     Int
 
 
 type alias Entities =
-    Dict ID Entity
+    Dict Id Entity
 
 
 type Entity
@@ -73,11 +73,11 @@ type Entity
 type Action
     = Idle
     | Crawl Direction2d
-    | Consume ID
+    | Consume Id
 
 
 type alias Actions =
-    Dict ID Action
+    Dict Id Action
 
 
 
@@ -126,20 +126,59 @@ world_update delta world =
 
 
 reason : Entities -> Actions
-reason =
-    Dict.map
-        (\id entity ->
-            let
-                _ =
-                    Debug.log "Reasoning" entity
-            in
-                case entity of
-                    Bug bug ->
-                        Crawl Direction2d.x
+reason entities =
+    entities
+        |> Dict.map
+            (\id entity ->
+                let
+                    _ =
+                        Debug.log "Reasoning" entity
+                in
+                    case entity of
+                        Bug bug ->
+                            attraction entities bug.position
+                                |> Vector2d.direction
+                                |> Maybe.withDefault Direction2d.x
+                                |> Crawl
 
-                    _ ->
-                        Idle
+                        _ ->
+                            Idle
+            )
+
+
+{-| Calculate the attraction vector for a bug at a given position.
+
+The bug will consider every Food entity in the environment and assign value to it based on it's distance (the further the food is, the less attraction value it has). Then resulting vectors will be summed.
+-}
+attraction : Entities -> Point2d -> Vector2d
+attraction entities position =
+    Dict.foldl
+        (\_ entity current ->
+            case entity of
+                Food food ->
+                    let
+                        direction =
+                            Direction2d.from position food.position
+
+                        value =
+                            1 / (Point2d.distanceFrom food.position position)
+                    in
+                        case direction of
+                            Nothing ->
+                                current
+
+                            Just direction ->
+                                Vector2d.sum current <|
+                                    Vector2d.with
+                                        { length = value
+                                        , direction = direction
+                                        }
+
+                _ ->
+                    current
         )
+        Vector2d.zero
+        entities
 
 
 perform : Time -> Actions -> World -> World
@@ -171,8 +210,11 @@ perform delta actions world =
 
                                 Crawl direction ->
                                     let
+                                        distance =
+                                            delta * 0.02
+
                                         bug =
-                                            Bug <| move direction 0.2 state
+                                            Bug <| move direction distance state
                                     in
                                         Dict.insert id bug entities
                                             |> World seed
@@ -298,9 +340,13 @@ init =
       , paused = False
       , world =
             world_empty
-                |> world_insert (bug ( 10, 10 ))
-                |> world_insert (bug ( -10, 20 ))
-                |> world_insert (food ( 20, -20 ))
+                |> world_insert (bug ( 0, 0 ))
+                |> world_insert (bug ( -100, 200 ))
+                |> world_insert (food ( 200, -200 ))
+                |> world_insert (food ( 200, -100 ))
+                |> world_insert (food ( -200, -200 ))
+                |> world_insert (food ( -200, -300 ))
+                |> world_insert (food ( -200, 300 ))
       }
     , Cmd.none
     )
