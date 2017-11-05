@@ -131,12 +131,12 @@ reason entities =
                 in
                     case entity of
                         Bug bug ->
-                            case reachableFood entities bug.position of
+                            case reachableFood entities bug of
                                 Just target ->
                                     Consume target
 
                                 Nothing ->
-                                    attraction entities bug.position
+                                    attraction entities bug
                                         |> Vector2d.direction
                                         |> Maybe.withDefault Direction2d.x
                                         |> Crawl
@@ -146,8 +146,11 @@ reason entities =
             )
 
 
-reachableFood : Entities -> Point2d -> Maybe Id
-reachableFood entities position =
+reachableFood :
+    Entities
+    -> { a | position : Point2d }
+    -> Maybe Id
+reachableFood entities { position } =
     entities
         |> Dict.foldl
             (\id entity result ->
@@ -170,13 +173,16 @@ reachableFood entities position =
 
 {-| Calculate the attraction vector for a bug at a given position.
 
-The bug will consider every Food entity in the environment and assign value to it based on it's distance (the further the food is, the less attraction value it has). Then resulting vectors will be summed.
+The bug will consider every Food and Bug entity in the environment and assign value to it based on it's distance (the further the food is, the less attraction value it has). Then resulting vectors will be summed.
 
 TODO: Take into account how hungry is the bug (hungry goes is more affected by distance - just go to the nearest food).
 
 -}
-attraction : Entities -> Point2d -> Vector2d
-attraction entities position =
+attraction :
+    Entities
+    -> { a | position : Point2d }
+    -> Vector2d
+attraction entities { position } =
     Dict.foldl
         (\_ entity current ->
             case entity of
