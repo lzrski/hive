@@ -354,6 +354,13 @@ world_insert entity { seed, entities } =
 
 
 
+{--TODO: kill helper (extracted from perform Bug Crawl) --
+world_kill : Id -> World -> World
+world_kill target { seed, entities } =
+    ...
+--}
+
+
 move :
     Direction2d
     -> Float
@@ -472,29 +479,38 @@ update msg model =
             ( { model | paused = False }, Cmd.none )
 
 
+world_populate :
+    (( Float, Float ) -> Entity)
+    -> Int
+    -> Int
+    -> World
+    -> World
+world_populate constructor rows cols world =
+    {- TODO: Make the distribution uneven (noisy or pseudo random, but in fact deterministic). -}
+    List.range ((cols // 2) * -1) (cols // 2)
+        |> List.foldl
+            (\x current ->
+                List.range ((rows // 2) * -1) (rows // 2)
+                    |> List.foldl
+                        (\y current ->
+                            let
+                                position =
+                                    ( toFloat x * 20, toFloat y * 20 )
+                            in
+                                world_insert (constructor position) <| current
+                        )
+                        current
+            )
+            world
+
+
 init =
     ( { elapsed = 0
       , paused = False
       , world =
             world_empty
-                |> world_insert (bug ( 0, 0 ))
-                |> world_insert (bug ( 0, 10 ))
-                |> world_insert (bug ( 10, 0 ))
-                |> world_insert (bug ( 19, 4 ))
-                |> world_insert (bug ( -10, 3 ))
-                |> world_insert (bug ( -100, 200 ))
-                |> world_insert (food ( 210, -10 ))
-                |> world_insert (food ( 200, -20 ))
-                |> world_insert (food ( 200, -50 ))
-                |> world_insert (food ( 180, -100 ))
-                |> world_insert (food ( 150, -150 ))
-                |> world_insert (food ( 100, 290 ))
-                |> world_insert (food ( 100, -200 ))
-                |> world_insert (food ( 0, -150 ))
-                |> world_insert (food ( 20, -100 ))
-                |> world_insert (food ( -200, 300 ))
-                |> world_insert (food ( -200, -200 ))
-                |> world_insert (food ( -200, -300 ))
+                |> world_populate food 10 10
+                |> world_populate bug 2 2
       }
     , Cmd.none
     )
