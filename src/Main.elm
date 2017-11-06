@@ -71,6 +71,7 @@ type Action
     = Idle
     | Crawl Direction2d
     | Consume Id
+    | Spawn
 
 
 type alias Actions =
@@ -123,7 +124,9 @@ reason entities =
             (\id entity ->
                 case entity of
                     Bug state ->
-                        if state.nutrition > 1 then
+                        if state.mass > 2 then
+                            Spawn
+                        else if state.nutrition > state.mass then
                             Idle
                         else
                             case reachableFood entities state of
@@ -187,8 +190,11 @@ attraction entities { position } =
                         direction =
                             Direction2d.from position food.position
 
+                        distance =
+                            Point2d.distanceFrom food.position position
+
                         value =
-                            1 / Point2d.distanceFrom food.position position
+                            1 / distance
                     in
                         case direction of
                             Nothing ->
@@ -214,8 +220,8 @@ attraction entities { position } =
                             if distance == 0 then
                                 0
                             else
-                                {- deterence is very strong when bugs are close, but weakens significantly with distance -}
-                                -10 / (distance ^ 3)
+                                {- deterence is very strong when bugs are close, but weakens significantly with distance. Also bigger bugs are more scary -}
+                                -10 * other.mass / (distance ^ 3)
                     in
                         case direction of
                             Nothing ->
@@ -329,6 +335,37 @@ perform delta actions world =
                                         _ ->
                                             world
 
+                                Spawn ->
+                                    let
+                                        offset =
+                                            Vector2d.with
+                                                { length = 1
+                                                , direction = Direction2d.x
+                                                }
+
+                                        position =
+                                            Point2d.translateBy
+                                                offset
+                                                state.position
+
+                                        offspring =
+                                            Bug
+                                                { position = position
+                                                , nutrition = 1
+                                                , mass = 0.1
+                                                }
+
+                                        parent =
+                                            Bug
+                                                { state
+                                                    | mass = state.mass - 0.1
+                                                    , nutrition = state.nutrition - 0.3
+                                                }
+                                    in
+                                        world
+                                            |> world_insert offspring
+                                            |> world_replace id parent
+
                         -- Food can take no actions ATM
                         Just (Food food) ->
                             world
@@ -345,6 +382,11 @@ world_insert entity { seed, entities } =
     { seed = seed + 1
     , entities = Dict.insert seed entity entities
     }
+
+
+world_replace : Id -> Entity -> World -> World
+world_replace id entity world =
+    { world | entities = Dict.insert id entity world.entities }
 
 
 
@@ -390,6 +432,9 @@ main =
 
 view : Model -> Html Msg
 view model =
+    {--
+    TODO: Stretch to container size and make background hsla(211, 76%, 10%, 1)
+    --}
     div []
         [ div [] [ sceneView model.world ]
         , div []
@@ -424,15 +469,15 @@ sceneView world =
 entityView : Entity -> Svg Msg
 entityView entity =
     case entity of
-        Bug bug ->
+        Bug state ->
             Svg.point2d
-                { radius = 3
+                { radius = 3 * state.mass
                 , attributes =
                     [ Svg.Attributes.stroke "red"
                     , Svg.Attributes.fill "pink"
                     ]
                 }
-                bug.position
+                state.position
 
         Food food ->
             Svg.point2d
@@ -507,7 +552,7 @@ init =
       , world =
             world_empty
                 |> world_populate food 1000
-                |> world_populate bug 10
+                |> world_populate bug 1
       }
     , Cmd.none
     )
