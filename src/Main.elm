@@ -178,9 +178,9 @@ TODO: Take into account how hungry is the bug (hungry goes is more affected by d
 -}
 attraction :
     Entities
-    -> { a | position : Point2d }
+    -> { a | position : Point2d, nutrition : Float }
     -> Vector2d
-attraction entities { position } =
+attraction entities { position, nutrition } =
     Dict.foldl
         (\_ entity current ->
             case entity of
@@ -194,7 +194,7 @@ attraction entities { position } =
                             Point2d.distanceFrom food.position position
 
                         value =
-                            1 / distance
+                            1 / (distance ^ (2 - nutrition / 2))
                     in
                         case direction of
                             Nothing ->
