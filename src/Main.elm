@@ -121,27 +121,23 @@ reason entities =
     entities
         |> Dict.map
             (\id entity ->
-                let
-                    _ =
-                        Debug.log "Reasoning" entity
-                in
-                    case entity of
-                        Bug state ->
-                            if state.nutrition > 1 then
-                                Idle
-                            else
-                                case reachableFood entities state of
-                                    Just target ->
-                                        Consume target
-
-                                    Nothing ->
-                                        attraction entities state
-                                            |> Vector2d.direction
-                                            |> Maybe.withDefault Direction2d.x
-                                            |> Crawl
-
-                        _ ->
+                case entity of
+                    Bug state ->
+                        if state.nutrition > 1 then
                             Idle
+                        else
+                            case reachableFood entities state of
+                                Just target ->
+                                    Consume target
+
+                                Nothing ->
+                                    attraction entities state
+                                        |> Vector2d.direction
+                                        |> Maybe.withDefault Direction2d.x
+                                        |> Crawl
+
+                    _ ->
+                        Idle
             )
 
 
@@ -244,9 +240,6 @@ perform delta actions world =
         |> Dict.foldl
             (\id action world ->
                 let
-                    _ =
-                        Debug.log "Performing action" action
-
                     { entities, seed } =
                         world
 
@@ -408,7 +401,7 @@ view model =
         , div []
             [ code
                 []
-                [ Html.text <| toString model ]
+                [ Html.text <| toString model.elapsed ]
             ]
         ]
 
@@ -420,10 +413,10 @@ sceneView world =
         |> Svg.g []
         |> Svg.render2d
             (BoundingBox2d.with
-                { minX = -400
-                , maxX = 400
-                , minY = -400
-                , maxY = 400
+                { minX = -800
+                , maxX = 800
+                , minY = -800
+                , maxY = 800
                 }
             )
 
@@ -497,8 +490,8 @@ world_populate constructor count world =
         generator =
             Random.list count <|
                 Random.pair
-                    (Random.int -400 400)
-                    (Random.int -300 300)
+                    (Random.int -800 800)
+                    (Random.int -800 800)
 
         ( positions, _ ) =
             Random.step generator <| Random.initialSeed world.seed
@@ -513,7 +506,7 @@ init =
       , paused = False
       , world =
             world_empty
-                |> world_populate food 300
+                |> world_populate food 1000
                 |> world_populate bug 10
       }
     , Cmd.none
