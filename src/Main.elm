@@ -65,6 +65,10 @@ type Entity
         { position : Point2d
         , quantity : Float
         }
+    | Seed
+        { position : Point2d
+        , size : Float
+        }
 
 
 type Action
@@ -72,6 +76,8 @@ type Action
     | Crawl Direction2d
     | Consume Id
     | Spawn
+    | Starve
+    | Ripe
 
 
 type alias Actions =
@@ -128,6 +134,8 @@ reason entities =
                             Spawn
                         else if state.nutrition > state.mass then
                             Idle
+                        else if state.nutrition < state.mass / 10 then
+                            Starve
                         else
                             case reachableFood entities state of
                                 Just target ->
@@ -138,6 +146,12 @@ reason entities =
                                         |> Vector2d.direction
                                         |> Maybe.withDefault Direction2d.x
                                         |> Crawl
+
+                    Seed state ->
+                        if state.size > 1 then
+                            Ripe
+                        else
+                            Idle
 
                     _ ->
                         Idle
@@ -234,6 +248,9 @@ attraction entities { position, nutrition } =
                                     , direction = direction
                                     }
                                     |> Vector2d.sum current
+
+                _ ->
+                    current
         )
         Vector2d.zero
         entities
@@ -286,19 +303,17 @@ perform delta actions world =
                                                 |> burn energy
                                     in
                                         if newState.nutrition <= 0 then
-                                            entities
-                                                |> Dict.remove id
-                                                |> World seed
+                                            world
+                                                |> world_remove id
                                                 |> world_insert
-                                                    (Food
+                                                    (Seed
                                                         { position = newState.position
-                                                        , quantity = newState.mass
+                                                        , size = newState.mass
                                                         }
                                                     )
                                         else
-                                            entities
-                                                |> Dict.insert id (Bug newState)
-                                                |> World seed
+                                            world
+                                                |> world_replace id (Bug newState)
 
                                 Consume target ->
                                     case Dict.get target entities of
@@ -366,9 +381,69 @@ perform delta actions world =
                                             |> world_insert offspring
                                             |> world_replace id parent
 
+                                Starve ->
+                                    {- Consume 0.1 of own mass in exchange for 0.2 nutrition. Consumed mass turns into a seed that will grow and eventually ripe into a food. -}
+                                    let
+                                        _ =
+                                            Debug.log "Starving" state
+
+                                        amount =
+                                            Basics.min state.mass 0.01
+
+                                        remaining =
+                                            state.mass - amount
+
+                                        seed =
+                                            Seed
+                                                { position = state.position
+                                                , size = amount
+                                                }
+
+                                        bug =
+                                            Bug
+                                                { state
+                                                    | nutrition = remaining
+                                                    , nutrition = state.nutrition + amount * 2
+                                                }
+                                    in
+                                        world
+                                            |> world_insert seed
+                                            |> if remaining > 0 then
+                                                bug
+                                                    |> Debug.log "Survived and pooped the seed"
+                                                    |> world_replace id
+                                               else
+                                                id
+                                                    |> Debug.log "Starved to death"
+                                                    |> world_remove
+
+                                _ ->
+                                    world
+
                         -- Food can take no actions ATM
-                        Just (Food food) ->
+                        Just (Food state) ->
                             world
+
+                        Just (Seed state) ->
+                            case action of
+                                Idle ->
+                                    let
+                                        seed =
+                                            Seed { state | size = state.size + delta * 0.00001 }
+                                    in
+                                        world |> world_replace id seed
+
+                                Ripe ->
+                                    let
+                                        food =
+                                            Food { position = state.position, quantity = state.size }
+                                    in
+                                        world
+                                            |> world_remove id
+                                            |> world_insert food
+
+                                _ ->
+                                    world
             )
             world
 
@@ -389,12 +464,8 @@ world_replace id entity world =
     { world | entities = Dict.insert id entity world.entities }
 
 
-
-{--TODO: kill helper (extracted from perform Bug Crawl) --
-world_kill : Id -> World -> World
-world_kill target { seed, entities } =
-    ...
---}
+world_remove id world =
+    { world | entities = Dict.remove id world.entities }
 
 
 move :
@@ -499,10 +570,28 @@ entityView entity =
                 { radius = 2 * state.quantity
                 , attributes =
                     [ Svg.Attributes.stroke "green"
-                    , Svg.Attributes.fill "lime"
+                    , Svg.Attributes.fill "hsl(100, 80%, 80%)"
                     ]
                 }
                 state.position
+
+        Seed state ->
+            let
+                saturation =
+                    round (state.size * 80)
+            in
+                Svg.point2d
+                    { radius = 2 * state.size
+                    , attributes =
+                        [ Svg.Attributes.stroke "none"
+                        , Svg.Attributes.fill
+                            ("hsl(100, "
+                                ++ toString (saturation)
+                                ++ "%, 80%)"
+                            )
+                        ]
+                    }
+                    state.position
 
 
 type Msg
@@ -566,8 +655,8 @@ init =
       , paused = False
       , world =
             world_empty
-                |> world_populate food 1000
-                |> world_populate bug 1
+                |> world_populate food 10
+                |> world_populate bug 10
       }
     , Cmd.none
     )
