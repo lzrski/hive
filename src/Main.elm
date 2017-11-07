@@ -436,7 +436,7 @@ view model =
     TODO: Stretch to container size and make background hsla(211, 76%, 10%, 1)
     --}
     div []
-        [ div [] [ sceneView model.world ]
+        [ div [ style "background:  hsl(200, 30%, 20%)" ] [ sceneView model.world ]
         , div []
             [ if model.paused then
                 button [ onClick Resume ] [ Html.text "Resume" ]
@@ -470,24 +470,39 @@ entityView : Entity -> Svg Msg
 entityView entity =
     case entity of
         Bug state ->
-            Svg.point2d
-                { radius = 3 * state.mass
-                , attributes =
-                    [ Svg.Attributes.stroke "red"
-                    , Svg.Attributes.fill "pink"
-                    ]
-                }
-                state.position
+            let
+                size =
+                    3 * state.mass
 
-        Food food ->
+                saturation =
+                    round ((state.nutrition / state.mass) * 100)
+            in
+                Svg.point2d
+                    { radius = size
+                    , attributes =
+                        [ Svg.Attributes.stroke
+                            ("hsl(0, "
+                                ++ (toString saturation)
+                                ++ "%, 50%)"
+                            )
+                        , Svg.Attributes.fill
+                            ("hsl(0, "
+                                ++ toString (saturation)
+                                ++ "%, 80%)"
+                            )
+                        ]
+                    }
+                    state.position
+
+        Food state ->
             Svg.point2d
-                { radius = 2
+                { radius = 2 * state.quantity
                 , attributes =
                     [ Svg.Attributes.stroke "green"
                     , Svg.Attributes.fill "lime"
                     ]
                 }
-                food.position
+                state.position
 
 
 type Msg
