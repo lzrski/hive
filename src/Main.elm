@@ -483,7 +483,7 @@ entityView entity =
                         [ Svg.Attributes.stroke
                             ("hsl(0, "
                                 ++ (toString saturation)
-                                ++ "%, 50%)"
+                                ++ "%, 30%)"
                             )
                         , Svg.Attributes.fill
                             ("hsl(0, "
