@@ -69,6 +69,7 @@ type Entity
     | Seed
         { position : Point2d
         , size : Float
+        , nutrient : Float
         }
 
 
@@ -77,7 +78,6 @@ type Action
     | Crawl Direction2d
     | Consume Id
     | Spawn
-    | Starve
     | Ripe
 
 
@@ -131,12 +131,10 @@ reason entities =
             (\id entity ->
                 case entity of
                     Bug state ->
-                        if state.mass > 2 then
+                        if state.mass > 1 then
                             Spawn
                         else if state.nutrition > state.mass then
                             Idle
-                        else if state.nutrition < state.mass / 3 then
-                            Starve
                         else
                             case reachableFood entities state of
                                 Just target ->
@@ -149,10 +147,10 @@ reason entities =
                                         |> Crawl
 
                     Seed state ->
-                        if state.size > 1 then
-                            Ripe
-                        else
+                        if state.nutrient > 0 then
                             Idle
+                        else
+                            Ripe
 
                     _ ->
                         Idle
@@ -286,9 +284,8 @@ perform delta actions world =
                                                 , nutrition = state.nutrition - delta / 100
                                             }
                                     in
-                                        entities
-                                            |> Dict.insert id (Bug newState)
-                                            |> World seed
+                                        world
+                                            |> world_replace id (Bug newState)
 
                                 Crawl direction ->
                                     let
@@ -309,7 +306,8 @@ perform delta actions world =
                                                 |> world_insert
                                                     (Seed
                                                         { position = newState.position
-                                                        , size = newState.mass
+                                                        , size = 0.01
+                                                        , nutrient = newState.mass
                                                         }
                                                     )
                                         else
@@ -382,35 +380,6 @@ perform delta actions world =
                                             |> world_insert offspring
                                             |> world_replace id parent
 
-                                Starve ->
-                                    {- Consume 0.1 of own mass in exchange for 0.2 nutrition. Consumed mass turns into a seed that will grow and eventually ripe into a food. -}
-                                    let
-                                        amount =
-                                            Basics.min state.mass 0.05
-
-                                        remaining =
-                                            state.mass - amount
-
-                                        seed =
-                                            Seed
-                                                { position = state.position
-                                                , size = amount / 5
-                                                }
-
-                                        bug =
-                                            Bug
-                                                { state
-                                                    | nutrition = remaining
-                                                    , nutrition = state.nutrition + amount * 5
-                                                }
-                                    in
-                                        world
-                                            |> world_insert seed
-                                            |> if remaining > 0 then
-                                                world_replace id bug
-                                               else
-                                                world_remove id
-
                                 _ ->
                                     world
 
@@ -422,8 +391,18 @@ perform delta actions world =
                             case action of
                                 Idle ->
                                     let
+                                        nutrition =
+                                            Basics.min (delta * 0.000002) state.nutrient
+
+                                        growth =
+                                            nutrition * 5
+
                                         seed =
-                                            Seed { state | size = state.size + delta * 0.00001 }
+                                            Seed
+                                                { state
+                                                    | size = state.size + growth
+                                                    , nutrient = state.nutrient - nutrition
+                                                }
                                     in
                                         world |> world_replace id seed
 
@@ -549,12 +528,12 @@ entityView entity =
                 Svg.point2d
                     { radius = size
                     , attributes =
-                        [ Svg.Attributes.stroke
+                        [ stroke
                             ("hsl(0, "
                                 ++ (toString saturation)
                                 ++ "%, 30%)"
                             )
-                        , Svg.Attributes.fill
+                        , fill
                             ("hsl(0, "
                                 ++ toString (saturation)
                                 ++ "%, 80%)"
@@ -567,8 +546,8 @@ entityView entity =
             Svg.point2d
                 { radius = 2 * state.quantity
                 , attributes =
-                    [ Svg.Attributes.stroke "green"
-                    , Svg.Attributes.fill "hsl(100, 80%, 80%)"
+                    [ stroke "green"
+                    , fill "hsl(100, 80%, 80%)"
                     ]
                 }
                 state.position
@@ -577,12 +556,19 @@ entityView entity =
             let
                 saturation =
                     round (state.size * 80)
+
+                outline =
+                    3 * state.nutrient
+
+                radius =
+                    2 * state.size + outline
             in
                 Svg.point2d
-                    { radius = 2 * state.size
+                    { radius = radius
                     , attributes =
-                        [ Svg.Attributes.stroke "none"
-                        , Svg.Attributes.fill
+                        [ stroke "hsl(0, 0%, 30%)"
+                        , strokeWidth <| (toString outline) ++ "px"
+                        , fill
                             ("hsl(100, "
                                 ++ toString (saturation)
                                 ++ "%, 80%)"
@@ -643,7 +629,7 @@ count_entities =
                         |> toString
                         |> String.split " "
                         |> List.head
-                        |> Maybe.withDefault "Wat?"
+                        |> Maybe.withDefault "Wa0000t?"
             in
                 Dict.update name
                     (Maybe.withDefault 0
@@ -682,8 +668,14 @@ init =
       , count = Dict.empty
       , world =
             world_empty
-                |> world_populate food 100
                 |> world_populate bug 1
+                |> world_populate food 4000
+            {--a mutant mother of bugs :-)
+                |> world_insert
+                    (Bug
+                        { position = Point2d.fromCoordinates ( 0, 0 ), nutrition = 0.1, mass = 10 }
+                    )
+                    --}
       }
     , Cmd.none
     )
