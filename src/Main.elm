@@ -608,26 +608,7 @@ update msg model =
 
         Count ->
             { model
-                | count =
-                    Dict.foldl
-                        (\id entity counter ->
-                            let
-                                name =
-                                    entity
-                                        |> toString
-                                        |> String.split " "
-                                        |> List.head
-                                        |> Maybe.withDefault "Wat?"
-                            in
-                                Dict.update name
-                                    (Maybe.withDefault 0
-                                        >> (+) 1
-                                        >> Just
-                                    )
-                                    counter
-                        )
-                        Dict.empty
-                        model.world.entities
+                | count = count_entities model.world.entities
             }
                 ! []
 
@@ -651,6 +632,27 @@ update msg model =
 
         Resume ->
             ( { model | paused = False }, Cmd.none )
+
+
+count_entities =
+    Dict.foldl
+        (\id entity counter ->
+            let
+                name =
+                    entity
+                        |> toString
+                        |> String.split " "
+                        |> List.head
+                        |> Maybe.withDefault "Wat?"
+            in
+                Dict.update name
+                    (Maybe.withDefault 0
+                        >> (+) 1
+                        >> Just
+                    )
+                    counter
+        )
+        Dict.empty
 
 
 world_populate :
