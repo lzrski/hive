@@ -37,6 +37,11 @@ import Time exposing (Time, second)
 type alias Model =
     { elapsed : Time
     , paused : Bool
+    , count :
+        { bugs : Int
+        , foods : Int
+        , seeds : Int
+        }
     , world : World
     }
 
@@ -134,7 +139,7 @@ reason entities =
                             Spawn
                         else if state.nutrition > state.mass then
                             Idle
-                        else if state.nutrition < state.mass / 10 then
+                        else if state.nutrition < state.mass / 3 then
                             Starve
                         else
                             case reachableFood entities state of
@@ -384,11 +389,8 @@ perform delta actions world =
                                 Starve ->
                                     {- Consume 0.1 of own mass in exchange for 0.2 nutrition. Consumed mass turns into a seed that will grow and eventually ripe into a food. -}
                                     let
-                                        _ =
-                                            Debug.log "Starving" state
-
                                         amount =
-                                            Basics.min state.mass 0.01
+                                            Basics.min state.mass 0.05
 
                                         remaining =
                                             state.mass - amount
@@ -396,26 +398,22 @@ perform delta actions world =
                                         seed =
                                             Seed
                                                 { position = state.position
-                                                , size = amount
+                                                , size = amount / 5
                                                 }
 
                                         bug =
                                             Bug
                                                 { state
                                                     | nutrition = remaining
-                                                    , nutrition = state.nutrition + amount * 2
+                                                    , nutrition = state.nutrition + amount * 5
                                                 }
                                     in
                                         world
                                             |> world_insert seed
                                             |> if remaining > 0 then
-                                                bug
-                                                    |> Debug.log "Survived and pooped the seed"
-                                                    |> world_replace id
+                                                world_replace id bug
                                                else
-                                                id
-                                                    |> Debug.log "Starved to death"
-                                                    |> world_remove
+                                                world_remove id
 
                                 _ ->
                                     world
@@ -518,6 +516,10 @@ view model =
             [ code
                 []
                 [ Html.text <| toString model.elapsed ]
+            , br [] []
+            , code
+                [ onClick Count ]
+                [ Html.text <| toString model.count ]
             ]
         ]
 
@@ -599,6 +601,7 @@ type Msg
     | Frame Time
     | Pause
     | Resume
+    | Count
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -606,6 +609,29 @@ update msg model =
     case msg of
         NoOp ->
             ( model, Cmd.none )
+
+        Count ->
+            { model
+                | count =
+                    Dict.foldl
+                        (\id entity counter ->
+                            case entity of
+                                Bug _ ->
+                                    { counter | bugs = counter.bugs + 1 }
+
+                                Food _ ->
+                                    { counter | foods = counter.foods + 1 }
+
+                                Seed _ ->
+                                    { counter | seeds = counter.seeds + 1 }
+                        )
+                        { bugs = 0
+                        , foods = 0
+                        , seeds = 0
+                        }
+                        model.world.entities
+            }
+                ! []
 
         Frame delay ->
             let
@@ -653,10 +679,15 @@ world_populate constructor count world =
 init =
     ( { elapsed = 0
       , paused = False
+      , count =
+            { bugs = 0
+            , foods = 0
+            , seeds = 0
+            }
       , world =
             world_empty
-                |> world_populate food 10
-                |> world_populate bug 10
+                |> world_populate food 100
+                |> world_populate bug 1
       }
     , Cmd.none
     )
@@ -666,4 +697,9 @@ subscriptions model =
     if model.paused then
         Sub.none
     else
-        AnimationFrame.diffs Frame
+        Sub.batch
+            [ AnimationFrame.diffs Frame
+            , Time.every
+                (second * 3)
+                (always Count)
+            ]
