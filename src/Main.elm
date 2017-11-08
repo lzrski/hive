@@ -37,11 +37,7 @@ import Time exposing (Time, second)
 type alias Model =
     { elapsed : Time
     , paused : Bool
-    , count :
-        { bugs : Int
-        , foods : Int
-        , seeds : Int
-        }
+    , count : Dict String Int
     , world : World
     }
 
@@ -615,20 +611,22 @@ update msg model =
                 | count =
                     Dict.foldl
                         (\id entity counter ->
-                            case entity of
-                                Bug _ ->
-                                    { counter | bugs = counter.bugs + 1 }
-
-                                Food _ ->
-                                    { counter | foods = counter.foods + 1 }
-
-                                Seed _ ->
-                                    { counter | seeds = counter.seeds + 1 }
+                            let
+                                name =
+                                    entity
+                                        |> toString
+                                        |> String.split " "
+                                        |> List.head
+                                        |> Maybe.withDefault "Wat?"
+                            in
+                                Dict.update name
+                                    (Maybe.withDefault 0
+                                        >> (+) 1
+                                        >> Just
+                                    )
+                                    counter
                         )
-                        { bugs = 0
-                        , foods = 0
-                        , seeds = 0
-                        }
+                        Dict.empty
                         model.world.entities
             }
                 ! []
@@ -679,11 +677,7 @@ world_populate constructor count world =
 init =
     ( { elapsed = 0
       , paused = False
-      , count =
-            { bugs = 0
-            , foods = 0
-            , seeds = 0
-            }
+      , count = Dict.empty
       , world =
             world_empty
                 |> world_populate food 100
