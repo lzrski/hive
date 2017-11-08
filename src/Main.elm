@@ -200,13 +200,13 @@ attraction entities { position, nutrition } =
         (\_ entity current ->
             case entity of
                 {- Bugs are attracted to food -}
-                Food food ->
+                Food piece ->
                     let
                         direction =
-                            Direction2d.from position food.position
+                            Direction2d.from position piece.position
 
                         distance =
-                            Point2d.distanceFrom food.position position
+                            Point2d.distanceFrom piece.position position
 
                         value =
                             1 / (distance ^ (2 - nutrition / 2))
