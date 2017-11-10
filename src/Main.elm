@@ -33,7 +33,9 @@ import OpenSolid.Vector2d as Vector2d exposing (Vector2d)
 import Random exposing (initialSeed)
 import Svg exposing (Svg)
 import Svg.Attributes exposing (..)
+import Task
 import Time exposing (Time, second)
+import Window
 
 
 type alias Model =
@@ -42,6 +44,7 @@ type alias Model =
     , count : Dict String Int
     , zoom : Float
     , translation : Vector2d
+    , size : Window.Size
     , world : World
     }
 
@@ -504,7 +507,7 @@ view model =
         ]
 
 
-sceneView { zoom, translation, world } =
+sceneView { zoom, translation, size, world } =
     world.entities
         |> Dict.values
         |> List.map entityView
@@ -513,10 +516,10 @@ sceneView { zoom, translation, world } =
         |> Svg.scaleAbout (Point2d.fromCoordinates ( 0, 0 )) zoom
         |> Svg.render2d
             (BoundingBox2d.with
-                { minX = -800
-                , maxX = 800
-                , minY = -800
-                , maxY = 800
+                { minX = (toFloat size.width) / -2
+                , maxX = (toFloat size.width) / 2
+                , minY = (toFloat size.height) / 2
+                , maxY = (toFloat size.height) / -2
                 }
             )
 
@@ -593,6 +596,7 @@ type Msg
     | Count
     | ZoomOut
     | ZoomIn
+    | Resize Window.Size
     | Pan Vector2d
 
 
@@ -620,6 +624,9 @@ update msg model =
                     Vector2d.sum model.translation vector
             }
                 ! []
+
+        Resize size ->
+            { model | size = size } ! []
 
         Frame delay ->
             let
@@ -686,32 +693,39 @@ world_populate constructor count world =
 
 
 init =
-    ( { elapsed = 0
-      , paused = False
-      , count = Dict.empty
-      , zoom = 1
-      , translation = Vector2d.fromComponents ( 0, 0 )
-      , world =
-            world_empty
-                |> world_populate bug 10
-                |> world_populate food 100
-      }
-    , Cmd.none
-    )
+    { elapsed = 0
+    , paused = False
+    , count = Dict.empty
+    , zoom = 1
+    , translation = Vector2d.fromComponents ( 0, 0 )
+    , size = { width = 0, height = 0 }
+    , world =
+        world_empty
+            |> world_populate bug 10
+            |> world_populate food 100
+    }
+        ! [ Task.perform Resize Window.size ]
 
 
 subscriptions model =
-    if model.paused then
-        -- Sub.none
-        Sub.batch [ Keyboard.presses handleKeyboard ]
-    else
-        Sub.batch
-            [ AnimationFrame.diffs Frame
-            , Keyboard.presses handleKeyboard
-            , Time.every
-                (second * 3)
-                (always Count)
+    let
+        common =
+            [ Keyboard.presses handleKeyboard
+            , Window.resizes Resize
             ]
+    in
+        if model.paused then
+            -- Sub.none
+            Sub.batch common
+        else
+            Sub.batch <|
+                common
+                    ++ [ AnimationFrame.diffs Frame
+                       , Keyboard.presses handleKeyboard
+                       , Time.every
+                            (second * 3)
+                            (always Count)
+                       ]
 
 
 handleKeyboard keycode =
