@@ -20,9 +20,11 @@ module Main exposing (main)
 -- View related
 
 import AnimationFrame
+import Char
 import Dict exposing (Dict)
 import Html exposing (..)
 import Html.Events exposing (onClick)
+import Keyboard
 import OpenSolid.BoundingBox2d as BoundingBox2d
 import OpenSolid.Direction2d as Direction2d exposing (Direction2d)
 import OpenSolid.Point2d as Point2d exposing (Point2d)
@@ -38,6 +40,8 @@ type alias Model =
     { elapsed : Time
     , paused : Bool
     , count : Dict String Int
+    , zoom : Float
+    , translation : Vector2d
     , world : World
     }
 
@@ -480,7 +484,8 @@ view model =
     TODO: Stretch to container size and make background hsla(211, 76%, 10%, 1)
     --}
     div []
-        [ div [ style "background:  hsl(200, 30%, 20%)" ] [ sceneView model.world ]
+        [ div [ style "background:  hsl(200, 30%, 20%)" ]
+            [ sceneView model ]
         , div []
             [ if model.paused then
                 button [ onClick Resume ] [ Html.text "Resume" ]
@@ -499,11 +504,13 @@ view model =
         ]
 
 
-sceneView world =
+sceneView { zoom, translation, world } =
     world.entities
         |> Dict.values
         |> List.map entityView
         |> Svg.g []
+        |> Svg.translateBy translation
+        |> Svg.scaleAbout (Point2d.fromCoordinates ( 0, 0 )) zoom
         |> Svg.render2d
             (BoundingBox2d.with
                 { minX = -800
@@ -584,6 +591,9 @@ type Msg
     | Pause
     | Resume
     | Count
+    | ZoomOut
+    | ZoomIn
+    | Pan Vector2d
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -595,6 +605,19 @@ update msg model =
         Count ->
             { model
                 | count = count_entities model.world.entities
+            }
+                ! []
+
+        ZoomOut ->
+            { model | zoom = model.zoom * 0.9 } ! []
+
+        ZoomIn ->
+            { model | zoom = model.zoom / 0.9 } ! []
+
+        Pan vector ->
+            { model
+                | translation =
+                    Vector2d.sum model.translation vector
             }
                 ! []
 
@@ -666,16 +689,12 @@ init =
     ( { elapsed = 0
       , paused = False
       , count = Dict.empty
+      , zoom = 1
+      , translation = Vector2d.fromComponents ( 0, 0 )
       , world =
             world_empty
-                |> world_populate bug 1
-                |> world_populate food 4000
-            {--a mutant mother of bugs :-)
-                |> world_insert
-                    (Bug
-                        { position = Point2d.fromCoordinates ( 0, 0 ), nutrition = 0.1, mass = 10 }
-                    )
-                    --}
+                |> world_populate bug 10
+                |> world_populate food 100
       }
     , Cmd.none
     )
@@ -683,11 +702,41 @@ init =
 
 subscriptions model =
     if model.paused then
-        Sub.none
+        -- Sub.none
+        Sub.batch [ Keyboard.presses handleKeyboard ]
     else
         Sub.batch
             [ AnimationFrame.diffs Frame
+            , Keyboard.presses handleKeyboard
             , Time.every
                 (second * 3)
                 (always Count)
             ]
+
+
+handleKeyboard keycode =
+    let
+        char =
+            Char.fromCode keycode
+    in
+        case char of
+            '-' ->
+                ZoomOut
+
+            '+' ->
+                ZoomIn
+
+            'h' ->
+                Pan <| Vector2d.fromComponents ( 10, 0 )
+
+            'j' ->
+                Pan <| Vector2d.fromComponents ( 0, 10 )
+
+            'k' ->
+                Pan <| Vector2d.fromComponents ( 0, -10 )
+
+            'l' ->
+                Pan <| Vector2d.fromComponents ( -10, 0 )
+
+            _ ->
+                NoOp
