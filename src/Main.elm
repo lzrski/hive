@@ -284,8 +284,8 @@ perform delta actions world =
                                     let
                                         newState =
                                             { state
-                                                | mass = state.mass + delta / 1000
-                                                , nutrition = state.nutrition - delta / 100
+                                                | mass = state.mass + delta * 0.003
+                                                , nutrition = state.nutrition - delta * 0.01
                                             }
                                     in
                                         world
@@ -396,7 +396,7 @@ perform delta actions world =
                                 Idle ->
                                     let
                                         nutrition =
-                                            Basics.min (delta * 0.000002) state.nutrient
+                                            Basics.min (delta * 0.00001) state.nutrient
 
                                         growth =
                                             nutrition * 5
