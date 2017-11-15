@@ -44,7 +44,7 @@ type alias Model =
     , count : Dict String Int
     , zoom : Float
     , translation : Vector2d
-    , size : Window.Size
+    , window : Window.Size
     , world : World
     }
 
@@ -507,7 +507,7 @@ view model =
         ]
 
 
-sceneView { zoom, translation, size, world } =
+sceneView { zoom, translation, window, world } =
     world.entities
         |> Dict.values
         |> List.map entityView
@@ -516,10 +516,10 @@ sceneView { zoom, translation, size, world } =
         |> Svg.scaleAbout (Point2d.fromCoordinates ( 0, 0 )) zoom
         |> Svg.render2d
             (BoundingBox2d.with
-                { minX = (toFloat size.width) / -2
-                , maxX = (toFloat size.width) / 2
-                , minY = (toFloat size.height) / 2
-                , maxY = (toFloat size.height) / -2
+                { minX = (toFloat window.width) / -2
+                , maxX = (toFloat window.width) / 2
+                , minY = (toFloat window.height) / 2
+                , maxY = (toFloat window.height) / -2
                 }
             )
 
@@ -626,7 +626,7 @@ update msg model =
                 ! []
 
         Resize size ->
-            { model | size = size } ! []
+            { model | window = size } ! []
 
         Frame delay ->
             let
@@ -698,7 +698,7 @@ init =
     , count = Dict.empty
     , zoom = 1
     , translation = Vector2d.fromComponents ( 0, 0 )
-    , size = { width = 0, height = 0 }
+    , window = { width = 0, height = 0 }
     , world =
         world_empty
             |> world_populate bug 10
