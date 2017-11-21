@@ -193,8 +193,6 @@ reachableFood entities { position } =
 
 The bug will consider every Food and Bug entity in the environment and assign value to it based on it's distance (the further the food is, the less attraction value it has). Then resulting vectors will be summed.
 
-TODO: Take into account how hungry is the bug (hungry goes is more affected by distance - just go to the nearest food).
-
 -}
 attraction :
     Entities
