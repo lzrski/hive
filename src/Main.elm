@@ -24,7 +24,6 @@ import Char
 import Dict exposing (Dict)
 import Html exposing (..)
 import Html.Events exposing (onClick)
-import Keyboard
 import OpenSolid.BoundingBox2d as BoundingBox2d
 import OpenSolid.Direction2d as Direction2d exposing (Direction2d)
 import OpenSolid.Point2d as Point2d exposing (Point2d)
@@ -36,6 +35,7 @@ import Svg.Attributes exposing (..)
 import Task
 import Time exposing (Time, second)
 import Window
+import Keyboard.Extra as Keyboard
 
 
 type alias Model =
@@ -46,6 +46,7 @@ type alias Model =
     , translation : Vector2d
     , window : Window.Size
     , world : World
+    , keys : List Keyboard.Key
     }
 
 
@@ -596,6 +597,7 @@ type Msg
     | ZoomIn
     | Resize Window.Size
     | Pan Vector2d
+    | KeyboardMsg Keyboard.Msg
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -611,15 +613,17 @@ update msg model =
                 ! []
 
         ZoomOut ->
-            { model | zoom = model.zoom * 0.9 } ! []
+            { model | zoom = model.zoom * 0.99 } ! []
 
         ZoomIn ->
-            { model | zoom = model.zoom / 0.9 } ! []
+            { model | zoom = model.zoom / 0.99 } ! []
 
         Pan vector ->
             { model
                 | translation =
-                    Vector2d.sum model.translation vector
+                    vector
+                        |> Vector2d.scaleBy (2 / model.zoom)
+                        |> Vector2d.sum model.translation
             }
                 ! []
 
@@ -646,6 +650,12 @@ update msg model =
 
         Resume ->
             ( { model | paused = False }, Cmd.none )
+
+        KeyboardMsg m ->
+            { model
+                | keys = Keyboard.update m model.keys
+            }
+                ! []
 
 
 count_entities =
@@ -701,6 +711,7 @@ init =
         world_empty
             |> world_populate bug 10
             |> world_populate food 100
+    , keys = []
     }
         ! [ Task.perform Resize Window.size ]
 
@@ -708,47 +719,41 @@ init =
 subscriptions model =
     let
         common =
-            [ Keyboard.presses handleKeyboard
+            [ AnimationFrame.diffs (handleKeyboard model.keys)
+            , Sub.map KeyboardMsg Keyboard.subscriptions
             , Window.resizes Resize
             ]
     in
         if model.paused then
-            -- Sub.none
             Sub.batch common
         else
             Sub.batch <|
                 common
                     ++ [ AnimationFrame.diffs Frame
-                       , Keyboard.presses handleKeyboard
                        , Time.every
                             (second * 3)
                             (always Count)
                        ]
 
 
-handleKeyboard keycode =
+handleKeyboard : List Keyboard.Key -> Time -> Msg
+handleKeyboard keys delta =
     let
-        char =
-            Char.fromCode keycode
+        { x, y } =
+            Keyboard.wasd keys
+
+        pan : Vector2d
+        pan =
+            ( x, y )
+                |> Tuple.mapFirst toFloat
+                |> Tuple.mapSecond toFloat
+                |> Vector2d.fromComponents
+                |> Vector2d.flip
+                |> Vector2d.scaleBy (delta / 10)
     in
-        case char of
-            '-' ->
-                ZoomOut
-
-            '+' ->
-                ZoomIn
-
-            'h' ->
-                Pan <| Vector2d.fromComponents ( 10, 0 )
-
-            'j' ->
-                Pan <| Vector2d.fromComponents ( 0, 10 )
-
-            'k' ->
-                Pan <| Vector2d.fromComponents ( 0, -10 )
-
-            'l' ->
-                Pan <| Vector2d.fromComponents ( -10, 0 )
-
-            _ ->
-                NoOp
+        if List.member Keyboard.HyphenMinus keys then
+            ZoomOut
+        else if List.member Keyboard.Equals keys then
+            ZoomIn
+        else
+            Pan pan
