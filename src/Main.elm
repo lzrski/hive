@@ -20,7 +20,6 @@ module Main exposing (main)
 -- View related
 
 import AnimationFrame
-import Char
 import Dict exposing (Dict)
 import Html exposing (..)
 import Html.Events exposing (onClick)
