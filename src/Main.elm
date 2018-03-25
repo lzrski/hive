@@ -478,6 +478,7 @@ world_replace id entity world =
     { world | entities = Dict.insert id entity world.entities }
 
 
+world_remove : Id -> World -> World
 world_remove id world =
     { world | entities = Dict.remove id world.entities }
 
@@ -506,6 +507,7 @@ burn energy state =
     { state | nutrition = Basics.max 0 (state.nutrition - energy) }
 
 
+main : Program Never Model Msg
 main =
     program
         { init = init
@@ -541,6 +543,7 @@ view model =
         ]
 
 
+sceneView : Model -> Html Msg
 sceneView { zoom, translation, window, world } =
     world.entities
         |> Dict.values
@@ -725,6 +728,7 @@ update msg model =
                 ! []
 
 
+count_entities : Entities -> Dict String Int
 count_entities =
     Dict.foldl
         (\id entity counter ->
@@ -767,6 +771,7 @@ world_populate constructor count world =
             |> List.foldl (\entity current -> world_insert entity current) world
 
 
+init : ( Model, Cmd Msg )
 init =
     { elapsed = 0
     , paused = False
@@ -778,11 +783,13 @@ init =
         world_empty
             |> world_populate bug 10
             |> world_populate food 100
+            |> world_populate predator 3
     , keys = []
     }
         ! [ Task.perform Resize Window.size ]
 
 
+subscriptions : Model -> Sub Msg
 subscriptions model =
     let
         common =
