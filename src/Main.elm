@@ -37,6 +37,16 @@ import Time exposing (Time, second)
 import Window
 
 
+main : Program Never Model Msg
+main =
+    program
+        { init = init
+        , update = update
+        , subscriptions = subscriptions
+        , view = view
+        }
+
+
 type alias Model =
     { elapsed : Time
     , paused : Bool
@@ -47,6 +57,142 @@ type alias Model =
     , world : World
     , keys : List Keyboard.Key
     }
+
+
+type Msg
+    = NoOp
+    | Frame Time
+    | Pause
+    | Resume
+    | Count
+    | ZoomOut
+    | ZoomIn
+    | Resize Window.Size
+    | Pan Vector2d
+    | KeyboardMsg Keyboard.Msg
+
+
+init : ( Model, Cmd Msg )
+init =
+    { elapsed = 0
+    , paused = False
+    , count = Dict.empty
+    , zoom = 1
+    , translation = Vector2d.fromComponents ( 0, 0 )
+    , window = { width = 0, height = 0 }
+    , world =
+        world_empty
+            |> world_populate bug 10
+            |> world_populate food 100
+            |> world_populate predator 3
+    , keys = []
+    }
+        ! [ Task.perform Resize Window.size ]
+
+
+update : Msg -> Model -> ( Model, Cmd Msg )
+update msg model =
+    case msg of
+        NoOp ->
+            ( model, Cmd.none )
+
+        Count ->
+            { model
+                | count = count_entities model.world.entities
+            }
+                ! []
+
+        ZoomOut ->
+            { model | zoom = model.zoom * 0.99 } ! []
+
+        ZoomIn ->
+            { model | zoom = model.zoom / 0.99 } ! []
+
+        Pan vector ->
+            { model
+                | translation =
+                    vector
+                        |> Vector2d.scaleBy (2 / model.zoom)
+                        |> Vector2d.sum model.translation
+            }
+                ! []
+
+        Resize size ->
+            { model | window = size } ! []
+
+        Frame delay ->
+            let
+                delta =
+                    {- Limit virtual detla to 32ms. In effect, with framerates below 30fps the simulation will slow down from the users perspective, but the physics will remain accurate. For high frame rates real delta will be used, making physics even more accurate.
+
+                       Additional bonus - if browser tab is not visible, it will effectively pause the game.
+                    -}
+                    Basics.min delay 32
+            in
+                { model
+                    | elapsed = model.elapsed + delta
+                    , world = world_update delta model.world
+                }
+                    ! []
+
+        Pause ->
+            ( { model | paused = True }, Cmd.none )
+
+        Resume ->
+            ( { model | paused = False }, Cmd.none )
+
+        KeyboardMsg m ->
+            { model
+                | keys = Keyboard.update m model.keys
+            }
+                ! []
+
+
+subscriptions : Model -> Sub Msg
+subscriptions model =
+    let
+        common =
+            [ AnimationFrame.diffs (handleKeyboard model.keys)
+            , Sub.map KeyboardMsg Keyboard.subscriptions
+            , Window.resizes Resize
+            ]
+    in
+        if model.paused then
+            Sub.batch common
+        else
+            Sub.batch <|
+                common
+                    ++ [ AnimationFrame.diffs Frame
+                       , Time.every
+                            (second * 3)
+                            (always Count)
+                       ]
+
+
+view : Model -> Html Msg
+view model =
+    {--
+    TODO: Stretch to container size and make background hsla(211, 76%, 10%, 1)
+    --}
+    div []
+        [ div [ style "background:  hsl(200, 30%, 20%)" ]
+            [ sceneView model ]
+        , div []
+            [ if model.paused then
+                button [ onClick Resume ] [ Html.text "Resume" ]
+              else
+                button [ onClick Pause ] [ Html.text "Pause" ]
+            ]
+        , div []
+            [ code
+                []
+                [ Html.text <| toString model.elapsed ]
+            , br [] []
+            , code
+                [ onClick Count ]
+                [ Html.text <| toString model.count ]
+            ]
+        ]
 
 
 type alias World =
@@ -507,42 +653,6 @@ burn energy state =
     { state | nutrition = Basics.max 0 (state.nutrition - energy) }
 
 
-main : Program Never Model Msg
-main =
-    program
-        { init = init
-        , update = update
-        , subscriptions = subscriptions
-        , view = view
-        }
-
-
-view : Model -> Html Msg
-view model =
-    {--
-    TODO: Stretch to container size and make background hsla(211, 76%, 10%, 1)
-    --}
-    div []
-        [ div [ style "background:  hsl(200, 30%, 20%)" ]
-            [ sceneView model ]
-        , div []
-            [ if model.paused then
-                button [ onClick Resume ] [ Html.text "Resume" ]
-              else
-                button [ onClick Pause ] [ Html.text "Pause" ]
-            ]
-        , div []
-            [ code
-                []
-                [ Html.text <| toString model.elapsed ]
-            , br [] []
-            , code
-                [ onClick Count ]
-                [ Html.text <| toString model.count ]
-            ]
-        ]
-
-
 sceneView : Model -> Html Msg
 sceneView { zoom, translation, window, world } =
     world.entities
@@ -657,77 +767,6 @@ entityView entity =
                     state.position
 
 
-type Msg
-    = NoOp
-    | Frame Time
-    | Pause
-    | Resume
-    | Count
-    | ZoomOut
-    | ZoomIn
-    | Resize Window.Size
-    | Pan Vector2d
-    | KeyboardMsg Keyboard.Msg
-
-
-update : Msg -> Model -> ( Model, Cmd Msg )
-update msg model =
-    case msg of
-        NoOp ->
-            ( model, Cmd.none )
-
-        Count ->
-            { model
-                | count = count_entities model.world.entities
-            }
-                ! []
-
-        ZoomOut ->
-            { model | zoom = model.zoom * 0.99 } ! []
-
-        ZoomIn ->
-            { model | zoom = model.zoom / 0.99 } ! []
-
-        Pan vector ->
-            { model
-                | translation =
-                    vector
-                        |> Vector2d.scaleBy (2 / model.zoom)
-                        |> Vector2d.sum model.translation
-            }
-                ! []
-
-        Resize size ->
-            { model | window = size } ! []
-
-        Frame delay ->
-            let
-                delta =
-                    {- Limit virtual detla to 32ms. In effect, with framerates below 30fps the simulation will slow down from the users perspective, but the physics will remain accurate. For high frame rates real delta will be used, making physics even more accurate.
-
-                       Additional bonus - if browser tab is not visible, it will effectively pause the game.
-                    -}
-                    Basics.min delay 32
-            in
-                { model
-                    | elapsed = model.elapsed + delta
-                    , world = world_update delta model.world
-                }
-                    ! []
-
-        Pause ->
-            ( { model | paused = True }, Cmd.none )
-
-        Resume ->
-            ( { model | paused = False }, Cmd.none )
-
-        KeyboardMsg m ->
-            { model
-                | keys = Keyboard.update m model.keys
-            }
-                ! []
-
-
 count_entities : Entities -> Dict String Int
 count_entities =
     Dict.foldl
@@ -769,45 +808,6 @@ world_populate constructor count world =
         positions
             |> List.map (\( x, y ) -> constructor ( toFloat x, toFloat y ))
             |> List.foldl (\entity current -> world_insert entity current) world
-
-
-init : ( Model, Cmd Msg )
-init =
-    { elapsed = 0
-    , paused = False
-    , count = Dict.empty
-    , zoom = 1
-    , translation = Vector2d.fromComponents ( 0, 0 )
-    , window = { width = 0, height = 0 }
-    , world =
-        world_empty
-            |> world_populate bug 10
-            |> world_populate food 100
-            |> world_populate predator 3
-    , keys = []
-    }
-        ! [ Task.perform Resize Window.size ]
-
-
-subscriptions : Model -> Sub Msg
-subscriptions model =
-    let
-        common =
-            [ AnimationFrame.diffs (handleKeyboard model.keys)
-            , Sub.map KeyboardMsg Keyboard.subscriptions
-            , Window.resizes Resize
-            ]
-    in
-        if model.paused then
-            Sub.batch common
-        else
-            Sub.batch <|
-                common
-                    ++ [ AnimationFrame.diffs Frame
-                       , Time.every
-                            (second * 3)
-                            (always Count)
-                       ]
 
 
 handleKeyboard : List Keyboard.Key -> Time -> Msg
