@@ -20,7 +20,7 @@ type alias World =
 init : World
 init =
     empty
-        |> populate bug_create 1
+        |> populate bug_create 20
         |> populate food_create 100
         |> populate predator_create 5
 
@@ -531,7 +531,7 @@ reachableFood entities { position } =
 
 {-| Calculate the attraction vector for a bug at a given position.
 
-The bug will consider every Food and Bug entity in the environment and assign value to it based on it's distance (the further the food is, the less attraction value it has). Then resulting vectors will be summed.
+The bug will consider every Food, Predator and Bug entity in the environment and assign value to it based on it's distance (the further the food is, the less attraction value it has). Then resulting vectors will be summed.
 
 -}
 attraction :
@@ -593,7 +593,49 @@ attraction entities { position, nutrition } =
                                     }
                                     |> Vector2d.sum current
 
-                _ ->
+                Predator chain ->
+                    let
+                        direction =
+                            chain
+                                |> List.head
+                                |> Maybe.andThen
+                                    (\head ->
+                                        Direction2d.from
+                                            position
+                                            head.position
+                                    )
+
+                        distance =
+                            chain
+                                |> List.head
+                                |> Maybe.map
+                                    (\head ->
+                                        Point2d.distanceFrom
+                                            head.position
+                                            position
+                                    )
+                                |> Maybe.withDefault 0
+
+                        threat =
+                            if distance == 0 then
+                                -- Either it got us and there is not much we can do about it, or it has no head and it poses no threat.
+                                0
+                            else
+                                {- Threat is very strong if the head is close and weakens with distance, but not as much as repulsion towards other bugs. The size of the head doesn't matter -}
+                                2 * nutrition / distance
+                    in
+                        case direction of
+                            Nothing ->
+                                current
+
+                            Just direction ->
+                                Vector2d.with
+                                    { length = threat
+                                    , direction = Direction2d.flip direction
+                                    }
+                                    |> Vector2d.sum current
+
+                Seed _ ->
                     current
         )
         Vector2d.zero
