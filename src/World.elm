@@ -212,20 +212,25 @@ perform delta actions world =
                     world
 
         bug action id state world =
-            case action of
-                Idle ->
+            let
+                { mass, nutrition, position } =
+                    state
+
+                idle world =
                     {- bugs grow when idle -}
                     let
-                        newState =
-                            { state
-                                | mass = state.mass + delta * 0.003
-                                , nutrition = state.nutrition - delta * 0.01
-                            }
+                        bug =
+                            Bug
+                                { state
+                                    | mass =
+                                        mass + delta * 0.003
+                                    , nutrition =
+                                        nutrition - delta * 0.01
+                                }
                     in
-                        world
-                            |> replace id (Bug newState)
+                        replace id bug world
 
-                Crawl direction ->
+                crawl direction world =
                     let
                         distance =
                             delta * 0.02
@@ -249,45 +254,41 @@ perform delta actions world =
                                         }
                                     )
                         else
-                            world
-                                |> replace id (Bug newState)
+                            replace id (Bug newState) world
 
-                Consume target ->
+                consume target world =
                     case Dict.get target world.entities of
                         Just (Food food) ->
                             let
+                                bug =
+                                    Bug { state | nutrition = nutrition + amount }
+
+                                update_food world =
+                                    if remaining > 0 then
+                                        replace target
+                                            (Food
+                                                { food | quantity = remaining }
+                                            )
+                                            world
+                                    else
+                                        remove target world
+
                                 amount =
-                                    Basics.min food.quantity (0.0001 * delta)
+                                    Basics.min
+                                        food.quantity
+                                        (0.0001 * delta)
 
                                 remaining =
                                     food.quantity - amount
-
-                                remains =
-                                    if remaining > 0 then
-                                        Just <| Food { food | quantity = remaining }
-                                    else
-                                        Nothing
-
-                                bug =
-                                    Bug
-                                        { state
-                                            | nutrition =
-                                                state.nutrition + amount
-                                        }
-
-                                newEntities =
-                                    world.entities
-                                        |> Dict.update target (always remains)
-                                        |> Dict.insert id bug
                             in
-                                { world
-                                    | entities = newEntities
-                                }
+                                world
+                                    |> replace id bug
+                                    |> update_food
 
                         _ ->
                             world
 
-                Spawn ->
+                spawn world =
                     let
                         offset =
                             Vector2d.with
@@ -317,9 +318,22 @@ perform delta actions world =
                         world
                             |> insert offspring
                             |> replace id parent
+            in
+                case action of
+                    Idle ->
+                        idle world
 
-                _ ->
-                    world
+                    Crawl direction ->
+                        crawl direction world
+
+                    Consume target ->
+                        consume target world
+
+                    Spawn ->
+                        spawn world
+
+                    _ ->
+                        world
 
         seed action id state world =
             case action of
