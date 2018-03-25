@@ -141,7 +141,10 @@ reason entities =
                 Seed state ->
                     seed state
 
-                _ ->
+                Predator chain ->
+                    predator chain
+
+                Food state ->
                     Idle
 
         bug state =
@@ -165,6 +168,46 @@ reason entities =
                 Idle
             else
                 Ripe
+
+        predator chain =
+            let
+                reason head =
+                    let
+                        vector =
+                            entities
+                                |> Dict.values
+                                |> List.map (attraction head)
+                                |> List.foldl Vector2d.sum Vector2d.zero
+
+                        attraction head entity =
+                            case entity of
+                                Bug bug ->
+                                    bug.position
+                                        |> Vector2d.from head.position
+                                        |> Vector2d.lengthAndDirection
+                                        |> Maybe.map
+                                            (\( length, direction ) ->
+                                                Vector2d.with
+                                                    { length = 1 / (length ^ 3)
+                                                    , direction = direction
+                                                    }
+                                            )
+                                        |> Maybe.withDefault Vector2d.zero
+
+                                _ ->
+                                    Vector2d.zero
+                    in
+                        vector
+                            |> Vector2d.direction
+                            |> Maybe.map Crawl
+                            |> Maybe.withDefault Idle
+            in
+                case List.head chain of
+                    Nothing ->
+                        Idle
+
+                    Just head ->
+                        reason head
     in
         entities
             |> Dict.map delegate
@@ -194,22 +237,41 @@ perform delta actions world =
                     seed action id state world
 
         predator action id chain world =
-            case action of
-                Idle ->
-                    -- TODO: Deplete nutrition of each chani
-                    world
+            let
+                crawl direction world =
+                    -- TODO: Move head in the direction and all segments toward the preceeding outline
+                    chain
+                        |> List.map (move_segment direction)
+                        |> Predator
+                        |> \e -> replace id e world
 
-                Crawl direction ->
-                    -- TODO: Move head in the direction and all segments toward the preceeding one
-                    world
+                move_segment direction segment =
+                    let
+                        distance =
+                            delta * 0.05
 
-                Consume bug ->
-                    -- TODO: Cons bug to the chain
-                    world
+                        energy =
+                            delta * 0.0001
+                    in
+                        segment
+                            |> move direction distance
+                            |> burn energy
+            in
+                case action of
+                    Idle ->
+                        -- TODO: Deplete nutrition of each chani
+                        world
 
-                _ ->
-                    -- No other actions can be performed by a predator
-                    world
+                    Crawl direction ->
+                        crawl direction world
+
+                    Consume bug ->
+                        -- TODO: Cons bug to the chain
+                        world
+
+                    _ ->
+                        -- No other actions can be performed by a predator
+                        world
 
         bug action id state world =
             let
@@ -590,12 +652,12 @@ attraction entities { position, nutrition } =
                         distance =
                             Point2d.distanceFrom other.position position
 
-                        value =
+                        repulsion =
                             if distance == 0 then
                                 0
                             else
                                 {- deterence is very strong when bugs are close, but weakens significantly with distance. Also bigger bugs are more scary -}
-                                -10 * other.mass / (distance ^ 3)
+                                10 * other.mass / (distance ^ 3)
                     in
                         case direction of
                             Nothing ->
@@ -604,7 +666,7 @@ attraction entities { position, nutrition } =
 
                             Just direction ->
                                 Vector2d.with
-                                    { length = value
+                                    { length = repulsion * -1
                                     , direction = direction
                                     }
                                     |> Vector2d.sum current
@@ -638,7 +700,7 @@ attraction entities { position, nutrition } =
                                 0
                             else
                                 {- Threat is very strong if the head is close and weakens with distance, but not as much as repulsion towards other bugs. The size of the head doesn't matter -}
-                                2 * nutrition / distance
+                                (20 ^ nutrition) / (distance ^ 2)
                     in
                         case direction of
                             Nothing ->
