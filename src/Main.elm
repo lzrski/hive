@@ -23,6 +23,7 @@ import AnimationFrame
 import Dict exposing (Dict)
 import Html exposing (..)
 import Html.Events exposing (onClick)
+import Keyboard.Extra as Keyboard
 import OpenSolid.BoundingBox2d as BoundingBox2d
 import OpenSolid.Direction2d as Direction2d exposing (Direction2d)
 import OpenSolid.Point2d as Point2d exposing (Point2d)
@@ -34,7 +35,6 @@ import Svg.Attributes exposing (..)
 import Task
 import Time exposing (Time, second)
 import Window
-import Keyboard.Extra as Keyboard
 
 
 type alias Model =
