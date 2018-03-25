@@ -172,186 +172,188 @@ reason entities =
 
 perform : Time -> Actions -> World -> World
 perform delta actions world =
-    {- TODO: Fold actions into a new world, starting with current -}
-    actions
-        |> Dict.foldl
-            (\id action world ->
-                let
-                    { entities, seed } =
+    let
+        delegate : Id -> Action -> World -> World
+        delegate id action world =
+            case Dict.get id world.entities of
+                -- Entity was previously removed. Move on.
+                Nothing ->
+                    world
+
+                Just (Predator chain) ->
+                    predator action id chain world
+
+                Just (Bug state) ->
+                    bug action id state world
+
+                Just (Food state) ->
+                    -- Food can take no actions ATM
+                    world
+
+                Just (Seed state) ->
+                    seed action id state world
+
+        predator action id chain world =
+            case action of
+                Idle ->
+                    -- TODO: Deplete nutrition of each chani
+                    world
+
+                Crawl direction ->
+                    -- TODO: Move head in the direction and all segments toward the preceeding one
+                    world
+
+                Consume bug ->
+                    -- TODO: Cons bug to the chain
+                    world
+
+                _ ->
+                    -- No other actions can be performed by a predator
+                    world
+
+        bug action id state world =
+            case action of
+                Idle ->
+                    {- bugs grow when idle -}
+                    let
+                        newState =
+                            { state
+                                | mass = state.mass + delta * 0.003
+                                , nutrition = state.nutrition - delta * 0.01
+                            }
+                    in
                         world
+                            |> replace id (Bug newState)
 
-                    entity =
-                        Dict.get id entities
-                in
-                    case entity of
-                        -- Entity was previously removed. Move on.
-                        Nothing ->
+                Crawl direction ->
+                    let
+                        distance =
+                            delta * 0.02
+
+                        energy =
+                            delta * 0.00001
+
+                        newState =
+                            state
+                                |> move direction distance
+                                |> burn energy
+                    in
+                        if newState.nutrition <= 0 then
+                            world
+                                |> remove id
+                                |> insert
+                                    (Seed
+                                        { position = newState.position
+                                        , size = 0.01
+                                        , nutrient = newState.mass
+                                        }
+                                    )
+                        else
+                            world
+                                |> replace id (Bug newState)
+
+                Consume target ->
+                    case Dict.get target world.entities of
+                        Just (Food food) ->
+                            let
+                                amount =
+                                    Basics.min food.quantity (0.0001 * delta)
+
+                                remaining =
+                                    food.quantity - amount
+
+                                remains =
+                                    if remaining > 0 then
+                                        Just <| Food { food | quantity = remaining }
+                                    else
+                                        Nothing
+
+                                bug =
+                                    Bug
+                                        { state
+                                            | nutrition =
+                                                state.nutrition + amount
+                                        }
+
+                                newEntities =
+                                    world.entities
+                                        |> Dict.update target (always remains)
+                                        |> Dict.insert id bug
+                            in
+                                { world
+                                    | entities = newEntities
+                                }
+
+                        _ ->
                             world
 
-                        Just (Predator chain) ->
-                            case action of
-                                Idle ->
-                                    -- TODO: Deplete nutrition of each chani
-                                    world
+                Spawn ->
+                    let
+                        offset =
+                            Vector2d.with
+                                { length = 1
+                                , direction = Direction2d.x
+                                }
 
-                                Crawl direction ->
-                                    -- TODO: Move head in the direction and all segments toward the preceeding one
-                                    world
+                        position =
+                            Point2d.translateBy
+                                offset
+                                state.position
 
-                                Consume bug ->
-                                    -- TODO: Cons bug to the chain
-                                    world
+                        offspring =
+                            Bug
+                                { position = position
+                                , nutrition = 1
+                                , mass = 0.1
+                                }
 
-                                _ ->
-                                    -- No other actions can be performed by a predator
-                                    world
+                        parent =
+                            Bug
+                                { state
+                                    | mass = state.mass - 0.1
+                                    , nutrition = state.nutrition - 0.3
+                                }
+                    in
+                        world
+                            |> insert offspring
+                            |> replace id parent
 
-                        Just (Bug state) ->
-                            case action of
-                                Idle ->
-                                    {- bugs grow when idle -}
-                                    let
-                                        newState =
-                                            { state
-                                                | mass = state.mass + delta * 0.003
-                                                , nutrition = state.nutrition - delta * 0.01
-                                            }
-                                    in
-                                        world
-                                            |> replace id (Bug newState)
+                _ ->
+                    world
 
-                                Crawl direction ->
-                                    let
-                                        distance =
-                                            delta * 0.02
+        seed action id state world =
+            case action of
+                Idle ->
+                    let
+                        nutrition =
+                            Basics.min (delta * 0.00001) state.nutrient
 
-                                        energy =
-                                            delta * 0.00001
+                        growth =
+                            nutrition * 5
 
-                                        newState =
-                                            state
-                                                |> move direction distance
-                                                |> burn energy
-                                    in
-                                        if newState.nutrition <= 0 then
-                                            world
-                                                |> remove id
-                                                |> insert
-                                                    (Seed
-                                                        { position = newState.position
-                                                        , size = 0.01
-                                                        , nutrient = newState.mass
-                                                        }
-                                                    )
-                                        else
-                                            world
-                                                |> replace id (Bug newState)
+                        seed =
+                            Seed
+                                { state
+                                    | size = state.size + growth
+                                    , nutrient = state.nutrient - nutrition
+                                }
+                    in
+                        world |> replace id seed
 
-                                Consume target ->
-                                    case Dict.get target entities of
-                                        Just (Food food) ->
-                                            let
-                                                amount =
-                                                    Basics.min food.quantity (0.0001 * delta)
+                Ripe ->
+                    let
+                        food =
+                            Food { position = state.position, quantity = state.size }
+                    in
+                        world
+                            |> remove id
+                            |> insert food
 
-                                                remaining =
-                                                    food.quantity - amount
-
-                                                remains =
-                                                    if remaining > 0 then
-                                                        Just <| Food { food | quantity = remaining }
-                                                    else
-                                                        Nothing
-
-                                                bug =
-                                                    Bug
-                                                        { state
-                                                            | nutrition =
-                                                                state.nutrition + amount
-                                                        }
-
-                                                newEntities =
-                                                    entities
-                                                        |> Dict.update target (always remains)
-                                                        |> Dict.insert id bug
-                                            in
-                                                { world
-                                                    | entities = newEntities
-                                                }
-
-                                        _ ->
-                                            world
-
-                                Spawn ->
-                                    let
-                                        offset =
-                                            Vector2d.with
-                                                { length = 1
-                                                , direction = Direction2d.x
-                                                }
-
-                                        position =
-                                            Point2d.translateBy
-                                                offset
-                                                state.position
-
-                                        offspring =
-                                            Bug
-                                                { position = position
-                                                , nutrition = 1
-                                                , mass = 0.1
-                                                }
-
-                                        parent =
-                                            Bug
-                                                { state
-                                                    | mass = state.mass - 0.1
-                                                    , nutrition = state.nutrition - 0.3
-                                                }
-                                    in
-                                        world
-                                            |> insert offspring
-                                            |> replace id parent
-
-                                _ ->
-                                    world
-
-                        -- Food can take no actions ATM
-                        Just (Food state) ->
-                            world
-
-                        Just (Seed state) ->
-                            case action of
-                                Idle ->
-                                    let
-                                        nutrition =
-                                            Basics.min (delta * 0.00001) state.nutrient
-
-                                        growth =
-                                            nutrition * 5
-
-                                        seed =
-                                            Seed
-                                                { state
-                                                    | size = state.size + growth
-                                                    , nutrient = state.nutrient - nutrition
-                                                }
-                                    in
-                                        world |> replace id seed
-
-                                Ripe ->
-                                    let
-                                        food =
-                                            Food { position = state.position, quantity = state.size }
-                                    in
-                                        world
-                                            |> remove id
-                                            |> insert food
-
-                                _ ->
-                                    world
-            )
-            world
+                _ ->
+                    world
+    in
+        actions
+            |> Dict.foldl delegate world
 
 
 entityView : Entity -> Svg msg
