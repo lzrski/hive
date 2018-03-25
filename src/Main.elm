@@ -78,6 +78,14 @@ type Entity
         , size : Float
         , nutrient : Float
         }
+    | Predator (List Segment)
+
+
+type alias Segment =
+    { position : Point2d
+    , mass : Float
+    , nutrition : Float
+    }
 
 
 type Action
@@ -118,6 +126,16 @@ food coordinates =
         { position = Point2d.fromCoordinates coordinates
         , quantity = 1.0
         }
+
+
+predator : ( Float, Float ) -> Entity
+predator coordinates =
+    Predator
+        [ { position = Point2d.fromCoordinates coordinates
+          , nutrition = 1.0
+          , mass = 1.0
+          }
+        ]
 
 
 
@@ -277,6 +295,24 @@ perform delta actions world =
                         -- Entity was previously removed. Move on.
                         Nothing ->
                             world
+
+                        Just (Predator chain) ->
+                            case action of
+                                Idle ->
+                                    -- TODO: Deplete nutrition of each chani
+                                    world
+
+                                Crawl direction ->
+                                    -- TODO: Move head in the direction and all segments toward the preceeding one
+                                    world
+
+                                Consume bug ->
+                                    -- TODO: Cons bug to the chain
+                                    world
+
+                                _ ->
+                                    -- No other actions can be performed by a predator
+                                    world
 
                         Just (Bug state) ->
                             case action of
@@ -525,6 +561,38 @@ sceneView { zoom, translation, window, world } =
 entityView : Entity -> Svg Msg
 entityView entity =
     case entity of
+        Predator chain ->
+            -- TODO: An Svg.triangle2d for each segment
+            let
+                segment state =
+                    let
+                        size =
+                            state.mass * 2
+
+                        saturation =
+                            round ((state.nutrition / state.mass) * 100)
+                    in
+                        Svg.point2d
+                            { radius = size
+                            , attributes =
+                                [ stroke
+                                    ("hsl(60, "
+                                        ++ (toString saturation)
+                                        ++ "%, 30%)"
+                                    )
+                                , fill
+                                    ("hsl(30, "
+                                        ++ toString (saturation)
+                                        ++ "%, 80%)"
+                                    )
+                                ]
+                            }
+                            state.position
+            in
+                chain
+                    |> List.map segment
+                    |> Svg.g []
+
         Bug state ->
             let
                 size =
