@@ -132,35 +132,42 @@ predator_create coordinates =
 
 reason : Entities -> Actions
 reason entities =
-    entities
-        |> Dict.map
-            (\id entity ->
-                case entity of
-                    Bug state ->
-                        if state.mass > 1 then
-                            Spawn
-                        else if state.nutrition > state.mass then
-                            Idle
-                        else
-                            case reachableFood entities state of
-                                Just target ->
-                                    Consume target
+    let
+        delegate id entity =
+            case entity of
+                Bug state ->
+                    bug state
 
-                                Nothing ->
-                                    attraction entities state
-                                        |> Vector2d.direction
-                                        |> Maybe.withDefault Direction2d.x
-                                        |> Crawl
+                Seed state ->
+                    seed state
 
-                    Seed state ->
-                        if state.nutrient > 0 then
-                            Idle
-                        else
-                            Ripe
+                _ ->
+                    Idle
 
-                    _ ->
-                        Idle
-            )
+        bug state =
+            if state.mass > 1 then
+                Spawn
+            else if state.nutrition > state.mass then
+                Idle
+            else
+                case reachableFood entities state of
+                    Just target ->
+                        Consume target
+
+                    Nothing ->
+                        attraction entities state
+                            |> Vector2d.direction
+                            |> Maybe.withDefault Direction2d.x
+                            |> Crawl
+
+        seed state =
+            if state.nutrient > 0 then
+                Idle
+            else
+                Ripe
+    in
+        entities
+            |> Dict.map delegate
 
 
 perform : Time -> Actions -> World -> World
