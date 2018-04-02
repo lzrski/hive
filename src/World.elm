@@ -37,7 +37,7 @@ init : World
 init =
     empty
         |> populate bug_create 20
-        |> populate food_create 100
+        |> populate food_create 200
         |> populate predator_create 5
 
 
@@ -222,7 +222,7 @@ reason entities =
                                             { emotions
                                                 | attraction =
                                                     Vector2d.with
-                                                        { length = 1 / (distance ^ 3)
+                                                        { length = (10 * bug.nutrition) / (distance ^ 3)
                                                         , direction = direction
                                                         }
                                                         |> Vector2d.sum emotions.attraction
@@ -317,7 +317,7 @@ perform delta actions world =
                 crawl direction world =
                     -- TODO: Move head in the direction
                     state
-                        |> move direction (delta * 0.03)
+                        |> move direction (delta * 0.025)
                         |> burn (delta * 0.00001)
                         |> update
 
@@ -330,10 +330,10 @@ perform delta actions world =
                         |> Direction2d.from state.position
                         |> Maybe.map
                             (\direction ->
-                                move direction (delta * 0.03) this
+                                move direction (delta * 0.025) this
                             )
                         |> Maybe.withDefault this
-                        |> burn (delta * 0.00004)
+                        |> burn (delta * 0.00003)
                         |> update
 
                 detach this =
