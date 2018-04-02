@@ -139,11 +139,17 @@ food_create coordinates =
 predator_create : ( Float, Float ) -> Entity
 predator_create coordinates =
     Predator
-        [ { position = Point2d.fromCoordinates coordinates
-          , nutrition = 1.0
-          , mass = 1.0
-          }
-        ]
+        { position = Point2d.fromCoordinates coordinates
+        , attachedTo = Nothing
+        , nutrition = 1.0
+        , mass = 1.0
+        }
+
+
+type alias Emotions =
+    { attraction : Vector2d
+    , prey : Maybe Id
+    }
 
 
 reason : Entities -> Actions
@@ -157,8 +163,8 @@ reason entities =
                 Seed state ->
                     seed state
 
-                Predator chain ->
-                    predator chain
+                Predator state ->
+                    predator state
 
                 Food state ->
                     Idle
@@ -185,45 +191,99 @@ reason entities =
             else
                 Ripe
 
-        predator chain =
+        predator state =
             let
-                reason head =
-                    let
-                        vector =
-                            entities
-                                |> Dict.values
-                                |> List.map (attraction head)
-                                |> List.foldl Vector2d.sum Vector2d.zero
+                hunger =
+                    state.mass / state.nutrition
 
-                        attraction head entity =
-                            case entity of
-                                Bug bug ->
-                                    bug.position
-                                        |> Vector2d.from head.position
+                consider :
+                    Id
+                    -> Entity
+                    -> Emotions
+                    -> Emotions
+                consider id entity emotions =
+                    case entity of
+                        Bug bug ->
+                            bug.position
+                                |> Vector2d.from state.position
+                                |> Vector2d.lengthAndDirection
+                                |> Maybe.map
+                                    (\( distance, direction ) ->
+                                        if emotions.prey /= Nothing then
+                                            -- Ignore if the predator is already after a prey
+                                            emotions
+                                        else if distance > (150 ^ hunger) then
+                                            -- Ignore if it's too far away
+                                            emotions
+                                        else if distance < 5 then
+                                            -- Attack if it's close enough
+                                            { emotions | prey = Just id }
+                                        else
+                                            { emotions
+                                                | attraction =
+                                                    Vector2d.with
+                                                        { length = 1 / (distance ^ 3)
+                                                        , direction = direction
+                                                        }
+                                                        |> Vector2d.sum emotions.attraction
+                                            }
+                                    )
+                                |> Maybe.withDefault
+                                    { emotions
+                                        | prey = Just id
+                                    }
+
+                        Predator other ->
+                            let
+                                repulsion =
+                                    other.position
+                                        |> Vector2d.from state.position
                                         |> Vector2d.lengthAndDirection
-                                        |> Maybe.map
-                                            (\( length, direction ) ->
-                                                Vector2d.with
-                                                    { length = 1 / (length ^ 3)
-                                                    , direction = direction
-                                                    }
-                                            )
-                                        |> Maybe.withDefault Vector2d.zero
+                            in
+                                if other.attachedTo == Nothing then
+                                    case repulsion of
+                                        Nothing ->
+                                            emotions
 
-                                _ ->
-                                    Vector2d.zero
-                    in
-                        vector
-                            |> Vector2d.direction
-                            |> Maybe.map Crawl
-                            |> Maybe.withDefault Idle
+                                        Just ( distance, direction ) ->
+                                            if distance < (120 ^ hunger) then
+                                                { emotions
+                                                    | attraction =
+                                                        Vector2d.with
+                                                            { length = 1 / distance ^ 3
+                                                            , direction = Direction2d.flip direction
+                                                            }
+                                                            |> Vector2d.sum emotions.attraction
+                                                }
+                                            else
+                                                emotions
+                                else
+                                    emotions
+
+                        _ ->
+                            emotions
+
+                decide : Emotions -> Action
+                decide emotions =
+                    case emotions.prey of
+                        Nothing ->
+                            emotions.attraction
+                                |> Vector2d.direction
+                                |> Maybe.map Crawl
+                                |> Maybe.withDefault Idle
+
+                        Just prey ->
+                            Consume prey
             in
-                case List.head chain of
+                case state.attachedTo of
                     Nothing ->
-                        Idle
+                        entities
+                            |> Dict.foldl consider
+                                { attraction = Vector2d.zero, prey = Nothing }
+                            |> decide
 
-                    Just head ->
-                        reason head
+                    Just previous ->
+                        Idle
     in
         entities
             |> Dict.map delegate
@@ -239,8 +299,8 @@ perform delta actions world =
                 Nothing ->
                     world
 
-                Just (Predator chain) ->
-                    predator action id chain world
+                Just (Predator state) ->
+                    predator action id state world
 
                 Just (Bug state) ->
                     bug action id state world
@@ -252,40 +312,91 @@ perform delta actions world =
                 Just (Seed state) ->
                     seed action id state world
 
-        predator action id chain world =
+        predator action id state world =
             let
                 crawl direction world =
-                    -- TODO: Move head in the direction and all segments toward the preceeding outline
-                    chain
-                        |> List.map (move_segment direction)
-                        |> Predator
-                        |> \e -> replace id e world
+                    -- TODO: Move head in the direction
+                    state
+                        |> move direction (delta * 0.03)
+                        |> burn (delta * 0.00001)
+                        |> update
 
-                move_segment direction segment =
-                    let
-                        distance =
-                            delta * 0.05
+                pullTo other this =
+                    this.position
+                        |> Vector2d.from other.position
+                        |> Vector2d.normalize
+                        |> Vector2d.scaleBy 5
+                        |> (flip Point2d.translateBy) other.position
+                        |> Direction2d.from state.position
+                        |> Maybe.map
+                            (\direction ->
+                                move direction (delta * 0.03) this
+                            )
+                        |> Maybe.withDefault this
+                        |> burn (delta * 0.00004)
+                        |> update
 
-                        energy =
-                            delta * 0.0001
-                    in
-                        segment
-                            |> move direction distance
-                            |> burn energy
+                detach this =
+                    update { this | attachedTo = Nothing }
+
+                update this =
+                    if this.nutrition <= 0 then
+                        world
+                            |> remove id
+                            |> insert
+                                (Seed
+                                    { position = this.position
+                                    , size = 0.01
+                                    , nutrient = this.mass
+                                    }
+                                )
+                    else
+                        replace id (Predator this) world
             in
-                case action of
-                    Idle ->
-                        -- TODO: Deplete nutrition of each chani
+                case ( state.attachedTo, action ) of
+                    ( Nothing, Idle ) ->
+                        -- TODO: Deplete nutrition
                         world
 
-                    Crawl direction ->
+                    ( Nothing, Crawl direction ) ->
                         crawl direction world
 
-                    Consume bug ->
-                        -- TODO: Cons bug to the chain
-                        world
+                    ( Nothing, Consume target ) ->
+                        case Dict.get target world.entities of
+                            Just (Bug other) ->
+                                world
+                                    |> remove target
+                                    |> insert
+                                        (Predator
+                                            { position = other.position
+                                            , mass = other.mass
+                                            , nutrition = other.nutrition
+                                            , attachedTo = Nothing
+                                            }
+                                        )
+                                    |> replace id
+                                        (Predator
+                                            { state
+                                                | attachedTo = Just world.seed
+                                            }
+                                        )
 
-                    _ ->
+                            _ ->
+                                world
+
+                    ( Just other, _ ) ->
+                        case Dict.get other world.entities of
+                            Nothing ->
+                                detach state
+
+                            Just (Predator segment) ->
+                                state
+                                    |> pullTo segment
+
+                            Just _ ->
+                                world
+
+                    ( _, _ ) ->
                         -- No other actions can be performed by a predator
                         world
 
@@ -451,37 +562,30 @@ perform delta actions world =
 entityView : Entity -> Svg msg
 entityView entity =
     case entity of
-        Predator chain ->
-            -- TODO: An Svg.triangle2d for each segment
+        Predator state ->
             let
-                segment state =
-                    let
-                        size =
-                            state.mass * 2
+                size =
+                    state.mass * 3
 
-                        saturation =
-                            round ((state.nutrition / state.mass) * 100)
-                    in
-                        Svg.point2d
-                            { radius = size
-                            , attributes =
-                                [ stroke
-                                    ("hsl(60, "
-                                        ++ (toString saturation)
-                                        ++ "%, 30%)"
-                                    )
-                                , fill
-                                    ("hsl(30, "
-                                        ++ toString (saturation)
-                                        ++ "%, 80%)"
-                                    )
-                                ]
-                            }
-                            state.position
+                saturation =
+                    round ((state.nutrition / state.mass) * 100)
             in
-                chain
-                    |> List.map segment
-                    |> Svg.g []
+                Svg.point2d
+                    { radius = size
+                    , attributes =
+                        [ stroke
+                            ("hsl(60, "
+                                ++ (toString saturation)
+                                ++ "%, 50%)"
+                            )
+                        , fill
+                            ("hsl(30, "
+                                ++ toString (saturation)
+                                ++ "%, 80%)"
+                            )
+                        ]
+                    }
+                    state.position
 
         Bug state ->
             let
@@ -559,7 +663,12 @@ type Entity
         , size : Float
         , nutrient : Float
         }
-    | Predator (List Segment)
+    | Predator
+        { position : Point2d
+        , mass : Float
+        , nutrition : Float
+        , attachedTo : Maybe Id
+        }
 
 
 insert : Entity -> World -> World
@@ -577,13 +686,6 @@ replace id entity world =
 remove : Id -> World -> World
 remove id world =
     { world | entities = Dict.remove id world.entities }
-
-
-type alias Segment =
-    { position : Point2d
-    , mass : Float
-    , nutrition : Float
-    }
 
 
 type Action
@@ -682,33 +784,18 @@ attraction entities { position, nutrition } =
 
                             Just direction ->
                                 Vector2d.with
-                                    { length = repulsion * -1
-                                    , direction = direction
+                                    { length = repulsion
+                                    , direction = Direction2d.flip direction
                                     }
                                     |> Vector2d.sum current
 
-                Predator chain ->
+                Predator other ->
                     let
-                        direction =
-                            chain
-                                |> List.head
-                                |> Maybe.andThen
-                                    (\head ->
-                                        Direction2d.from
-                                            position
-                                            head.position
-                                    )
-
-                        distance =
-                            chain
-                                |> List.head
-                                |> Maybe.map
-                                    (\head ->
-                                        Point2d.distanceFrom
-                                            head.position
-                                            position
-                                    )
-                                |> Maybe.withDefault 0
+                        ( distance, direction ) =
+                            position
+                                |> Vector2d.from other.position
+                                |> Vector2d.lengthAndDirection
+                                |> Maybe.withDefault ( 0, Direction2d.x )
 
                         threat =
                             if distance == 0 then
@@ -716,18 +803,16 @@ attraction entities { position, nutrition } =
                                 0
                             else
                                 {- Threat is very strong if the head is close and weakens with distance, but not as much as repulsion towards other bugs. The size of the head doesn't matter -}
-                                (20 ^ nutrition) / (distance ^ 2)
+                                300 / (distance ^ (3 - nutrition))
                     in
-                        case direction of
-                            Nothing ->
-                                current
-
-                            Just direction ->
-                                Vector2d.with
-                                    { length = threat
-                                    , direction = Direction2d.flip direction
-                                    }
-                                    |> Vector2d.sum current
+                        if other.attachedTo == Nothing then
+                            Vector2d.with
+                                { length = threat
+                                , direction = direction
+                                }
+                                |> Vector2d.sum current
+                        else
+                            current
 
                 Seed _ ->
                     current
